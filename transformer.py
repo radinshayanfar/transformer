@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 class AttentionHead(nn.Module):
-    def __init__(self, d_model: int, d_k: int):
+    def __init__(self, d_model: int, d_k: int):  # we assume d_k == d_v and only use d_k here
         super().__init__()
         self.scale = math.sqrt(d_k)
         self.W_Q = nn.Parameter(torch.randn(d_model, d_k))
@@ -34,8 +34,19 @@ class AttentionHead(nn.Module):
         return attention
 
 
-class MultiHeadAttention:
-    pass
+class MultiHeadAttention(nn.Module):
+    def __init__(self, h, d_model, d_v):
+        super().__init__()
+        self.heads = [AttentionHead(d_model, d_v) for _ in range(h)]
+        self.W_O = nn.Parameter(torch.randn((h*d_v, d_model)))
+        self.b_O = nn.Parameter(torch.randn((1, d_model)))
+
+    def forward(self, x, masked=False, enc_dec_key=None, enc_dec_value=None):
+        zs = [head(x, masked, enc_dec_key, enc_dec_value) for head in self.heads]
+        z = torch.cat(zs, dim=1)
+        z = z @ self.W_O + self.b_O
+
+        return z
 
 class EncoderBlock:
     pass
