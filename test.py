@@ -1,5 +1,6 @@
 import torch
 from transformer import AttentionHead, MultiHeadAttention, EncoderBlock, DecoderBlock, EncoderStack, DecoderStack
+from utils import get_positional_encoding_table
 
 if __name__ == "__main__":
     d_model = 16
@@ -42,3 +43,5 @@ if __name__ == "__main__":
     dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff, 2, True)
     stack = dec_stack(torch.randn(2, d_model))
     print(stack)
+
+    print(get_positional_encoding_table(5, 16))
