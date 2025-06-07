@@ -1,5 +1,5 @@
 import torch
-from transformer import AttentionHead, MultiHeadAttention, EncoderBlock, DecoderBlock
+from transformer import AttentionHead, MultiHeadAttention, EncoderBlock, DecoderBlock, EncoderStack, DecoderStack
 
 if __name__ == "__main__":
     d_model = 16
@@ -30,3 +30,15 @@ if __name__ == "__main__":
     dec_block = DecoderBlock(8, d_model, d_k, d_ff, decoder_only=True)
     block = enc_block(torch.randn(2, d_model))
     print(block.shape)
+
+    enc_stack = EncoderStack(6, 8, d_model, d_k, d_ff)
+    stack = enc_stack(torch.randn(2, d_model))
+    print(stack.shape)
+
+    dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff, 5000)
+    stack = dec_stack(torch.randn(2, d_model), torch.randn(5, d_model))
+    print(stack.shape)
+
+    dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff, 2, True)
+    stack = dec_stack(torch.randn(2, d_model))
+    print(stack)

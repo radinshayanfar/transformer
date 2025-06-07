@@ -112,8 +112,30 @@ class DecoderBlock(nn.Module):
 
         return x
 
-class EncoderStack:
-    pass
+class EncoderStack(nn.Module):
+    def __init__(self, n_blocks, h, d_model, d_k, d_ff):
+        super().__init__()
+        self.blocks = [EncoderBlock(h, d_model, d_k, d_ff) for _ in range(n_blocks)]
+    
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
 
-class DecoderStack:
-    pass
+class DecoderStack(nn.Module):
+    def __init__(self, n_blocks, h, d_model, d_k, d_ff, n_vocab, decoder_only=False):
+        super().__init__()
+        self.blocks = [DecoderBlock(h, d_model, d_k, d_ff, decoder_only) for _ in range(n_blocks)]
+
+        self.linear = nn.Linear(d_model, n_vocab)
+
+        self.decoder_only = decoder_only
+    
+    def forward(self, x, enc_dec_layer_input=None):
+        for block in self.blocks:
+            x = block(x, enc_dec_layer_input)
+        
+        x = self.linear(x)
+        x = torch.softmax(x, dim=1)
+
+        return x
