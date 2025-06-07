@@ -46,7 +46,32 @@ class MultiHeadAttention(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    pass
+    def __init__(self, h, d_model, d_k, d_ff):
+        super().__init__()
+
+        self.mult_head_att = MultiHeadAttention(h, d_model, d_k)
+
+        # using conv1d with filter size 1 to mimic separate FFN application
+        self.ffn_l1 = nn.Conv1d(d_model, d_ff, kernel_size=1)
+        self.ffn_l2 = nn.Conv1d(d_ff, d_model, kernel_size=1)
+
+        self.layer_norm1 = nn.LayerNorm(d_model)
+        self.layer_norm2 = nn.LayerNorm(d_model)
+    
+    def forward(self, x):
+        z = self.mult_head_att(x)
+        x = self.layer_norm1(z + x)
+        # TODO: apply dropout to x
+        
+        # add a dummy dim for conv layers
+        y = torch.relu(self.ffn_l1(x.unsqueeze(dim=-1)))
+        y = self.ffn_l2(y)
+        y = y.squeeze()
+        # TODO: apply dropout to y
+
+        x = self.layer_norm2(y + x)
+
+        return x
 
 class DecoderBlock:
     pass
