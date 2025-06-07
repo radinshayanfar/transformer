@@ -12,16 +12,14 @@ class AttentionHead(nn.Module):
 
         self.att_mask = torch.full((d_k, d_k), float("-inf")).triu(1)  # setting diagonal to 1 to exclude the main diagonal
 
-    def forward(self, x, masked=False, enc_dec_key=None, enc_dec_value=None):
+    def forward(self, x, masked=False, enc_dec_layer_input=None):
         Q = self.W_Q(x)
-        if enc_dec_key is None:  # this is not a encoder decoder attention layer, so we have to compute K and V
+        if enc_dec_layer_input is None:  # this is not a encoder decoder attention layer, so we have to compute K and V based on x
             K = self.W_K(x)
-        else:
-            K = enc_dec_key
-        if enc_dec_value is None:  # this is not a encoder decoder attention layer, so we have to compute K and V
             V = self.W_V(x)
         else:
-            V = enc_dec_value
+            K = self.W_K(enc_dec_layer_input)
+            V = self.W_V(enc_dec_layer_input)
         
         scaled = (Q @ K.T) / self.scale
         if masked:  # set next tokens to -inf for decoder blocks
@@ -37,8 +35,8 @@ class MultiHeadAttention(nn.Module):
         self.heads = [AttentionHead(d_model, d_v) for _ in range(h)]
         self.W_O = nn.Linear(h*d_v, d_model)
 
-    def forward(self, x, masked=False, enc_dec_key=None, enc_dec_value=None):
-        zs = [head(x, masked, enc_dec_key, enc_dec_value) for head in self.heads]
+    def forward(self, x, masked=False, enc_dec_layer_input=None):
+        zs = [head(x, masked, enc_dec_layer_input) for head in self.heads]
         z = torch.cat(zs, dim=1)
         z = self.W_O(z)
 

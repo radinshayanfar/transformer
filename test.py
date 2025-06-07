@@ -18,3 +18,7 @@ if __name__ == "__main__":
     enc_block = EncoderBlock(8, d_model, d_k, d_ff)
     block = enc_block(torch.randn(2, d_model))
     print(block.shape)
+
+    dec_head = MultiHeadAttention(8, d_model, d_k)
+    att = dec_head(torch.randn(2, d_model), False, torch.randn(5, d_model))
+    print(att.shape)
