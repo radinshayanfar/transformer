@@ -13,6 +13,7 @@ class AttentionHead(nn.Module):
         self.att_mask = torch.full((d_k, d_k), float("-inf")).triu(1)  # setting diagonal to 1 to exclude the main diagonal
 
     def forward(self, x, masked=False, enc_dec_layer_input=None):
+        assert masked == False or enc_dec_layer_input is None, "Either masked could be True or enc_dec_layer_input can have value, but not both"
         Q = self.W_Q(x)
         if enc_dec_layer_input is None:  # this is not a encoder decoder attention layer, so we have to compute K and V based on x
             K = self.W_K(x)
