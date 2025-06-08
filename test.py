@@ -1,5 +1,5 @@
 import torch
-from transformer import AttentionHead, MultiHeadAttention, EncoderBlock, DecoderBlock, EncoderStack, DecoderStack
+from transformer import AttentionHead, MultiHeadAttention, EncoderBlock, DecoderBlock, EncoderStack, DecoderStack, Transformer
 from utils import get_positional_encoding_table
 
 if __name__ == "__main__":
@@ -36,14 +36,26 @@ if __name__ == "__main__":
     stack = enc_stack(torch.randn(1, 2, d_model))
     print(stack.shape)
 
-    dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff, 5000)
+    dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff)
     stack = dec_stack(torch.randn(1, 2, d_model), torch.randn(1, 5, d_model))
     print(stack.shape)
 
-    dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff, 2, True)
+    dec_stack = DecoderStack(6, 8, d_model, d_k, d_ff, True)
     stack = dec_stack(torch.randn(1, 2, d_model))
     print(stack)
 
     print(get_positional_encoding_table(5, 16))
 
     stack = dec_stack(torch.randn(10, 2, d_model))
+
+    transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="encoder")
+    output = transformer(torch.randint(0, 100, (4, 17)))
+    print(output.shape)
+
+    transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="decoder")
+    output = transformer(torch.randint(0, 100, (4, 17)))
+    print(output.shape)
+
+    transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="both")
+    output = transformer(torch.randint(0, 100, (4, 17)), torch.randint(0, 100, (4, 5)))
+    print(output.shape)

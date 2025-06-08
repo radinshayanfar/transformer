@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+from typing import Optional, Literal
 
 from utils import get_positional_encoding_table
 
@@ -137,20 +138,63 @@ class EncoderStack(nn.Module):
         return x
 
 
+# we use a separate class for decoder stack to add more flexibility
 class DecoderStack(nn.Module):
-    def __init__(self, n_blocks, h, d_model, d_k, d_ff, n_vocab, decoder_only=False):
+    def __init__(self, n_blocks, h, d_model, d_k, d_ff, decoder_only=False):
         super().__init__()
         self.blocks = [DecoderBlock(h, d_model, d_k, d_ff, decoder_only) for _ in range(n_blocks)]
 
-        self.linear = nn.Linear(d_model, n_vocab)
-
-        self.decoder_only = decoder_only
-    
     def forward(self, x, enc_dec_layer_input=None):
         for block in self.blocks:
             x = block(x, enc_dec_layer_input)
-        
-        x = self.linear(x)
-        x = torch.softmax(x, dim=1)
 
         return x
+
+
+class Transformer(nn.Module):
+    def __init__(self, n_blocks, h, d_model, d_k, d_ff, n_vocab, max_context_len, arch: Optional[Literal["decoder", "encoder", "both"]] = None):
+        super().__init__()
+        self.arch = arch
+
+        if self.arch != "decoder":
+            self.encoder_stack = EncoderStack(n_blocks, h, d_model, d_k, d_ff)
+        if self.arch != "encoder":
+            self.decoder_stack = DecoderStack(n_blocks, h, d_model, d_k, d_ff, True if self.arch == "decoder" else False)
+
+        self.pos_emb_table = get_positional_encoding_table(max_context_len, d_model)
+
+        self.emb_table = nn.Parameter(torch.randn((d_model, n_vocab)))
+
+        self.linear = nn.Linear(d_model, n_vocab)
+
+    
+    def embed_inputs(self, input_ids):
+        B, L = input_ids.shape
+        input_embs = self.emb_table[:, input_ids.reshape(-1)].T.reshape(B, L, -1)
+        return input_embs
+    
+
+    def forward(self, x, y=None):
+        x = self.embed_inputs(x)
+        if y is not None:
+            y = self.embed_inputs(y)
+
+        encoder_output = None
+        if self.arch != "decoder":
+            encoder_output = self.encoder_stack(x)
+        if self.arch != "encoder":
+            decoder_output = self.decoder_stack(x if self.arch == "decoder" else y, encoder_output)
+        
+        if self.arch == "encoder":
+            encoder_output = self.linear(encoder_output)
+            encoder_probs = torch.softmax(encoder_output, dim=-1)
+            return encoder_probs
+        decoder_output = self.linear(decoder_output)
+        decoder_probs = torch.softmax(decoder_output, dim=-1)
+        # if self.arch == "decoder":
+        #     return decoder_output
+        return decoder_probs
+            
+
+    def generate(self):
+        pass
