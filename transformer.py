@@ -16,7 +16,7 @@ class AttentionHead(nn.Module):
 
         self.masked = masked
 
-    def forward(self, x, enc_dec_layer_input=None):
+    def forward(self, x, enc_dec_layer_input=None, padding_mask=None, padding_mask_enc_dec=None):
         assert self.masked == False or enc_dec_layer_input is None, "Either masked could be True or enc_dec_layer_input can have value, but not both"
         Q = self.W_Q(x)
         if enc_dec_layer_input is None:  # this is not a encoder decoder attention layer, so we have to compute K and V based on x
@@ -32,6 +32,13 @@ class AttentionHead(nn.Module):
             # att_mask = torch.full(scaled.shape[-2:], float("-inf"), device=scaled.device).triu(1)  # setting diagonal to 1 to exclude the main diagonal
             att_mask = torch.full_like(scaled, float("-inf")).triu(1)  # setting diagonal to 1 to exclude the main diagonal
             scaled += att_mask
+        if padding_mask is not None:
+            padding_mask1 = padding_mask.unsqueeze(1)
+            padding_mask2 = padding_mask_enc_dec.unsqueeze(1) if enc_dec_layer_input is not None else padding_mask1
+            padding_mask = padding_mask1.transpose(-2, -1) @ padding_mask2  # outer product to convert to 2D
+            padding_mask[padding_mask == 0] = float("-inf")
+            padding_mask[padding_mask == 1] = 0
+            scaled += padding_mask
         # TODO: add batch attention mask for padded batches
         # softmaxing the scores accros each token, so that each row sums to 1
         attention = torch.softmax(scaled, dim=-1) @ V
@@ -44,8 +51,8 @@ class MultiHeadAttention(nn.Module):
         self.heads = [AttentionHead(d_model, d_v, masked=masked) for _ in range(h)]
         self.W_O = nn.Linear(h*d_v, d_model)
 
-    def forward(self, x, enc_dec_layer_input=None):
-        zs = [head(x, enc_dec_layer_input) for head in self.heads]
+    def forward(self, x, enc_dec_layer_input=None, padding_mask=None, padding_mask_enc_dec=None):  # if enc_dec attention, padding_mask is for encoder input
+        zs = [head(x, enc_dec_layer_input, padding_mask, padding_mask_enc_dec) for head in self.heads]
         z = torch.cat(zs, dim=-1)
         z = self.W_O(z)
 
@@ -65,8 +72,8 @@ class EncoderBlock(nn.Module):
         self.layer_norm1 = nn.LayerNorm(d_model)
         self.layer_norm2 = nn.LayerNorm(d_model)
     
-    def forward(self, x):
-        z = self.mult_head_att(x)
+    def forward(self, x, padding_mask=None):
+        z = self.mult_head_att(x, padding_mask=padding_mask)
         x = self.layer_norm1(z + x)
         # TODO: apply dropout to x
         
@@ -102,14 +109,14 @@ class DecoderBlock(nn.Module):
             self.encdec_att = MultiHeadAttention(h, d_model, d_k)
             self.layer_norm2 = nn.LayerNorm(d_model)
     
-    def forward(self, x, enc_dec_layer_input=None):
+    def forward(self, x, enc_dec_layer_input=None, padding_mask_x=None, padding_mask_enc_dec=None):
         assert self.decoder_only or enc_dec_layer_input is not None, "enc_dec_layer_input should be provided in non-decoder only blocks"
-        z = self.masked_att(x)
+        z = self.masked_att(x, padding_mask=padding_mask_x)
         x = self.layer_norm1(z + x)
         # TODO: apply dropout to x
 
         if not self.decoder_only:
-            z = self.encdec_att(x, enc_dec_layer_input)
+            z = self.encdec_att(x, enc_dec_layer_input, padding_mask=padding_mask_x, padding_mask_enc_dec=padding_mask_enc_dec)
             x = self.layer_norm2(z + x)
             # TODO: apply dropout to x
         
@@ -132,9 +139,9 @@ class EncoderStack(nn.Module):
         super().__init__()
         self.blocks = [EncoderBlock(h, d_model, d_k, d_ff) for _ in range(n_blocks)]
     
-    def forward(self, x):
+    def forward(self, x, padding_mask=None):
         for block in self.blocks:
-            x = block(x)
+            x = block(x, padding_mask)
         return x
 
 
@@ -144,9 +151,9 @@ class DecoderStack(nn.Module):
         super().__init__()
         self.blocks = [DecoderBlock(h, d_model, d_k, d_ff, decoder_only) for _ in range(n_blocks)]
 
-    def forward(self, x, enc_dec_layer_input=None):
+    def forward(self, x, enc_dec_layer_input=None, padding_mask_x=None, padding_mask_enc_dec=None):
         for block in self.blocks:
-            x = block(x, enc_dec_layer_input)
+            x = block(x, enc_dec_layer_input, padding_mask_x, padding_mask_enc_dec)
 
         return x
 
@@ -174,16 +181,19 @@ class Transformer(nn.Module):
         return input_embs
     
 
-    def forward(self, x, y=None):
+    def forward(self, x, y=None, padding_mask_x=None, padding_mask_y=None):
         x = self.embed_inputs(x)
         if y is not None:
             y = self.embed_inputs(y)
 
         encoder_output = None
         if self.arch != "decoder":
-            encoder_output = self.encoder_stack(x)
+            encoder_output = self.encoder_stack(x, padding_mask=padding_mask_x)
         if self.arch != "encoder":
-            decoder_output = self.decoder_stack(x if self.arch == "decoder" else y, encoder_output)
+            dec_input = x if self.arch == "decoder" else y
+            padding_mask_dec = padding_mask_x if self.arch == "decoder" else padding_mask_y
+            padding_mask_enc = padding_mask_x if self.arch != "decoder" else None
+            decoder_output = self.decoder_stack(dec_input, encoder_output, padding_mask_x=padding_mask_dec, padding_mask_enc_dec=padding_mask_enc)
         
         if self.arch == "encoder":
             encoder_output = self.linear(encoder_output)

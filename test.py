@@ -59,3 +59,24 @@ if __name__ == "__main__":
     transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="both")
     output = transformer(torch.randint(0, 100, (4, 17)), torch.randint(0, 100, (4, 5)))
     print(output.shape)
+
+    head = AttentionHead(d_model, d_k)
+    att = head(torch.randn(3, 3, d_model), padding_mask=torch.Tensor([[1, 1, 0], [1, 0, 0], [1, 1, 1]]))
+    print(att)
+
+    transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="encoder")
+    output = transformer(torch.randint(0, 100, (4, 3)), padding_mask_x=torch.Tensor([[1, 1, 0], [1, 0, 0], [1, 1, 1], [1, 1, 1]]))
+    print(output.shape)
+
+    transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="decoder")
+    output = transformer(torch.randint(0, 100, (4, 3)), padding_mask_x=torch.Tensor([[1, 1, 0], [1, 0, 0], [1, 1, 1], [1, 1, 1]]))
+    print(output.shape)
+
+    transformer = Transformer(6, 8, d_model, d_k, d_ff, 100, 1024, arch="both")
+    output = transformer(
+        torch.randint(0, 100, (4, 3)),
+        torch.randint(0, 100, (4, 2)),
+        padding_mask_x=torch.Tensor([[1, 1, 0], [1, 0, 0], [1, 1, 1], [1, 1, 1]]),
+        padding_mask_y=torch.Tensor([[1, 0], [1, 0], [1, 1], [1, 1]]),
+    )
+    print(output.shape)
