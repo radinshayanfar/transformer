@@ -2,6 +2,9 @@ import math
 import torch
 import torch.nn as nn
 
+from utils import get_positional_encoding_table
+
+
 class AttentionHead(nn.Module):
     def __init__(self, d_model, d_k, masked=False):  # we assume d_k == d_v and only use d_k here
         super().__init__()
@@ -22,12 +25,15 @@ class AttentionHead(nn.Module):
             K = self.W_K(enc_dec_layer_input)
             V = self.W_V(enc_dec_layer_input)
         
-        scaled = (Q @ K.T) / self.scale
+        # print("Q", Q.shape, "K", K.shape, "K.T", K.transpose(-2, -1).shape, "V", V.shape)
+        scaled = (Q @ K.transpose(-2, -1)) / self.scale
         if self.masked:  # set next tokens to -inf for decoder blocks
+            # att_mask = torch.full(scaled.shape[-2:], float("-inf"), device=scaled.device).triu(1)  # setting diagonal to 1 to exclude the main diagonal
             att_mask = torch.full_like(scaled, float("-inf")).triu(1)  # setting diagonal to 1 to exclude the main diagonal
             scaled += att_mask
+        # TODO: add batch attention mask for padded batches
         # softmaxing the scores accros each token, so that each row sums to 1
-        attention = torch.softmax(scaled, dim=1) @ V
+        attention = torch.softmax(scaled, dim=-1) @ V
         return attention
 
 
@@ -39,7 +45,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, x, enc_dec_layer_input=None):
         zs = [head(x, enc_dec_layer_input) for head in self.heads]
-        z = torch.cat(zs, dim=1)
+        z = torch.cat(zs, dim=-1)
         z = self.W_O(z)
 
         return z
@@ -64,14 +70,18 @@ class EncoderBlock(nn.Module):
         # TODO: apply dropout to x
         
         # add a dummy dim for conv layers
-        y = torch.relu(self.ffn_l1(x.unsqueeze(dim=-1)))
+        B, L = x.shape[:2]
+        y = x.reshape(-1, *x.shape[2:])
+        y = torch.relu(self.ffn_l1(y.unsqueeze(dim=-1)))
         y = self.ffn_l2(y)
         y = y.squeeze()
+        y = y.reshape(B, L, *y.shape[1:])
         # TODO: apply dropout to y
 
         x = self.layer_norm2(y + x)
 
         return x
+
 
 class DecoderBlock(nn.Module):
     def __init__(self, h, d_model, d_k, d_ff, decoder_only=False):
@@ -103,14 +113,18 @@ class DecoderBlock(nn.Module):
             # TODO: apply dropout to x
         
         # add a dummy dim for conv layers
-        y = torch.relu(self.ffn_l1(x.unsqueeze(dim=-1)))
+        B, L = x.shape[:2]
+        y = x.reshape(-1, *x.shape[2:])
+        y = torch.relu(self.ffn_l1(y.unsqueeze(dim=-1)))
         y = self.ffn_l2(y)
         y = y.squeeze()
+        y = y.reshape(B, L, *y.shape[1:])
         # TODO: apply dropout to y
 
         x = self.layer_norm3(y + x)
 
         return x
+
 
 class EncoderStack(nn.Module):
     def __init__(self, n_blocks, h, d_model, d_k, d_ff):
@@ -121,6 +135,7 @@ class EncoderStack(nn.Module):
         for block in self.blocks:
             x = block(x)
         return x
+
 
 class DecoderStack(nn.Module):
     def __init__(self, n_blocks, h, d_model, d_k, d_ff, n_vocab, decoder_only=False):
