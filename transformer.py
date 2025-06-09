@@ -39,9 +39,9 @@ class AttentionHead(nn.Module):
             padding_mask[padding_mask == 0] = float("-inf")
             padding_mask[padding_mask == 1] = 0
             scaled += padding_mask
-        # TODO: add batch attention mask for padded batches
         # softmaxing the scores accros each token, so that each row sums to 1
         attention = torch.softmax(scaled, dim=-1) @ V
+        attention = attention.nan_to_num()  # to prevent nan to propagate to other positions in multihead linear layer
         return attention
 
 
