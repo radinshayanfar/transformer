@@ -36,6 +36,7 @@ class AttentionHead(nn.Module):
             padding_mask1 = padding_mask.unsqueeze(1)
             padding_mask2 = padding_mask_enc_dec.unsqueeze(1) if enc_dec_layer_input is not None else padding_mask1
             padding_mask = padding_mask1.transpose(-2, -1) @ padding_mask2  # outer product to convert to 2D
+            padding_mask = padding_mask.float()
             padding_mask[padding_mask == 0] = float("-inf")
             padding_mask[padding_mask == 1] = 0
             scaled += padding_mask
