@@ -1,8 +1,10 @@
+import json
 import torch
 import torch.nn as nn
 import datasets
 from datasets import load_dataset
 from tokenizers import Tokenizer
+from tqdm import tqdm
 
 from transformer import Transformer
 
@@ -38,38 +40,40 @@ class WMT14TranslationDataset(Dataset):
         }
 
 
-def collate_fn(batch, tokenizer, pad_token="[PAD]"):
-    # batch: list of dicts with "source", "target" (both raw strings)
-    src_texts = [item["source"] for item in batch]
-    tgt_texts = [item["target"] for item in batch]
+    @staticmethod
+    def collate_fn(batch, tokenizer, pad_token="[PAD]"):
+        # batch: list of dicts with "source", "target" (both raw strings)
+        src_texts = [item["source"] for item in batch]
+        tgt_texts = [item["target"] for item in batch]
+        tgt_texts = ["[SEP]" + text + "[EOS]" for text in tgt_texts]
 
-    src_enc = tokenizer.encode_batch(src_texts)
-    tgt_enc = tokenizer.encode_batch(tgt_texts)
+        src_enc = tokenizer.encode_batch(src_texts)
+        tgt_enc = tokenizer.encode_batch(tgt_texts)
 
-    def pad_and_mask(encodings):
-        ids = [torch.tensor(e.ids, dtype=torch.long) for e in encodings]
-        max_len = max(len(x) for x in ids)
-        pad_id = tokenizer.token_to_id(pad_token)
-        input_ids = torch.stack([
-            torch.cat([x, torch.full((max_len - len(x),), pad_id, dtype=torch.long)])
-            for x in ids
-        ])
-        attention_mask = torch.stack([
-            torch.cat([torch.ones(len(x), dtype=torch.long),
-                       torch.zeros(max_len - len(x), dtype=torch.long)])
-            for x in ids
-        ])
-        return input_ids, attention_mask
+        def pad_and_mask(encodings):
+            ids = [torch.tensor(e.ids, dtype=torch.long) for e in encodings]
+            max_len = max(len(x) for x in ids)
+            pad_id = tokenizer.token_to_id(pad_token)
+            input_ids = torch.stack([
+                torch.cat([x, torch.full((max_len - len(x),), pad_id, dtype=torch.long)])
+                for x in ids
+            ])
+            attention_mask = torch.stack([
+                torch.cat([torch.ones(len(x), dtype=torch.long),
+                        torch.zeros(max_len - len(x), dtype=torch.long)])
+                for x in ids
+            ])
+            return input_ids, attention_mask
 
-    input_ids, input_attention_mask = pad_and_mask(src_enc)
-    labels, labels_attention_mask = pad_and_mask(tgt_enc)
+        input_ids, input_attention_mask = pad_and_mask(src_enc)
+        labels, labels_attention_mask = pad_and_mask(tgt_enc)
 
-    return {
-        "input_ids": input_ids,
-        "input_attention_mask": input_attention_mask,
-        "labels": labels,
-        "labels_attention_mask": labels_attention_mask,
-    }
+        return {
+            "source_ids": input_ids,
+            "source_attention_mask": input_attention_mask,
+            "target_ids": labels,
+            "target_attention_mask": labels_attention_mask,
+        }
 
 
 if __name__ == "__main__":
@@ -85,25 +89,60 @@ if __name__ == "__main__":
         dataset,
         batch_size=8,
         shuffle=True,
-        collate_fn=lambda x: collate_fn(x, tokenizer)
+        collate_fn=lambda x: WMT14TranslationDataset.collate_fn(x, tokenizer)
     )
 
-    transformer = Transformer(6, 8, 512, 64, 2048, 30_000, 1024, arch="both")
-    for batch in dataloader:
-        print(batch["input_ids"].shape)
-        print(batch["input_attention_mask"].shape)
-        print(batch["labels"].shape)
-        print(batch["labels_attention_mask"].shape)
+    if torch.backends.mps.is_available():  # for mac
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
-        print(batch["input_ids"])
-        print(batch["input_attention_mask"])
-        
+    transformer = Transformer(6, 8, 512, 64, 2048, tokenizer.get_vocab_size(), 1024, arch="both")
+    transformer = transformer.to(device)
+
+    loss_fn = nn.CrossEntropyLoss(reduction="none")  # Set reduction to 'none' to get element-wise loss
+    optim = torch.optim.Adam(transformer.parameters(), lr=0.0001)
+
+    history_log = []
+
+    for batch in (pbar := tqdm(dataloader)):
+        source_ids = batch["source_ids"].to(device)
+        source_attention_mask = batch["source_attention_mask"].to(device)
+        target_ids = batch["target_ids"].to(device)
+        target_attention_mask = batch["target_attention_mask"].to(device)
+
         output = transformer(
-            batch["input_ids"],
-            batch["labels"],
-            padding_mask_x=batch["input_attention_mask"],
-            padding_mask_y=batch["labels_attention_mask"],
+            source_ids,
+            target_ids[:, :-1],  # dropping EOS token as input
+            padding_mask_x=source_attention_mask,
+            padding_mask_y=target_attention_mask[:, :-1],
         )
-        print(output.shape)
 
-        break
+        labels, labels_mask = target_ids[:, 1:], target_attention_mask[:, 1:]  # dropping SEP for labels
+        # labels = nn.functional.one_hot(labels, num_classes=tokenizer.get_vocab_size()).to(torch.float)
+        labels = labels.long()  # this seems to be more efficient
+
+        labels = labels.reshape(-1)
+        output = output.reshape(-1, output.shape[-1])
+        labels_mask = labels_mask.reshape(-1)
+
+        loss = loss_fn(output, labels)
+        loss = loss * labels_mask
+        loss = loss.sum() / labels_mask.sum()
+
+        loss.backward()
+
+        optim.step()
+        optim.zero_grad()
+
+        history_log.append({
+            "epoch": 0,
+            "loss": loss.item()
+        })
+        pbar.set_description(f"loss: {loss.item():.3f}")
+
+    torch.save(transformer.state_dict(), "wmt_de-en.pt")
+    with open("history.json", 'w') as fp:
+        json.dump(history_log, fp)
