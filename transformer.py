@@ -49,7 +49,7 @@ class AttentionHead(nn.Module):
 class MultiHeadAttention(nn.Module):
     def __init__(self, h, d_model, d_v, masked=False):
         super().__init__()
-        self.heads = [AttentionHead(d_model, d_v, masked=masked) for _ in range(h)]
+        self.heads = nn.ModuleList([AttentionHead(d_model, d_v, masked=masked) for _ in range(h)])
         self.W_O = nn.Linear(h*d_v, d_model)
 
     def forward(self, x, enc_dec_layer_input=None, padding_mask=None, padding_mask_enc_dec=None):  # if enc_dec attention, padding_mask is for encoder input
@@ -138,7 +138,7 @@ class DecoderBlock(nn.Module):
 class EncoderStack(nn.Module):
     def __init__(self, n_blocks, h, d_model, d_k, d_ff):
         super().__init__()
-        self.blocks = [EncoderBlock(h, d_model, d_k, d_ff) for _ in range(n_blocks)]
+        self.blocks = nn.ModuleList([EncoderBlock(h, d_model, d_k, d_ff) for _ in range(n_blocks)])
     
     def forward(self, x, padding_mask=None):
         for block in self.blocks:
@@ -150,7 +150,7 @@ class EncoderStack(nn.Module):
 class DecoderStack(nn.Module):
     def __init__(self, n_blocks, h, d_model, d_k, d_ff, decoder_only=False):
         super().__init__()
-        self.blocks = [DecoderBlock(h, d_model, d_k, d_ff, decoder_only) for _ in range(n_blocks)]
+        self.blocks = nn.ModuleList([DecoderBlock(h, d_model, d_k, d_ff, decoder_only) for _ in range(n_blocks)])
 
     def forward(self, x, enc_dec_layer_input=None, padding_mask_x=None, padding_mask_enc_dec=None):
         for block in self.blocks:
