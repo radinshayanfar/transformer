@@ -28,21 +28,17 @@ class AttentionHead(nn.Module):
         
         # print("Q", Q.shape, "K", K.shape, "K.T", K.transpose(-2, -1).shape, "V", V.shape)
         scaled = (Q @ K.transpose(-2, -1)) / self.scale
-        if self.masked:  # set next tokens to -inf for decoder blocks
-            # att_mask = torch.full(scaled.shape[-2:], float("-inf"), device=scaled.device).triu(1)  # setting diagonal to 1 to exclude the main diagonal
-            att_mask = torch.full_like(scaled, float("-inf")).triu(1)  # setting diagonal to 1 to exclude the main diagonal
-            scaled += att_mask
+        # softmaxing the scores accros each token, so that each row sums to 1
+        softmaxed = torch.softmax(scaled, dim=-1)
+        if self.masked:  # causal attention
+            att_mask = torch.ones_like(softmaxed).tril()
+            softmaxed = softmaxed * att_mask
         if padding_mask is not None:
             padding_mask1 = padding_mask.unsqueeze(1)
             padding_mask2 = padding_mask_enc_dec.unsqueeze(1) if enc_dec_layer_input is not None else padding_mask1
             padding_mask = padding_mask1.transpose(-2, -1) @ padding_mask2  # outer product to convert to 2D
-            padding_mask = padding_mask.float()
-            padding_mask[padding_mask == 0] = float("-inf")
-            padding_mask[padding_mask == 1] = 0
-            scaled += padding_mask
-        # softmaxing the scores accros each token, so that each row sums to 1
-        attention = torch.softmax(scaled, dim=-1) @ V
-        attention = attention.nan_to_num()  # to prevent nan to propagate to other positions in multihead linear layer
+            softmaxed = softmaxed * padding_mask
+        attention = softmaxed @ V
         return attention
 
 
