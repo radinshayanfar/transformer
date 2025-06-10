@@ -182,7 +182,7 @@ class Transformer(nn.Module):
         return input_embs
     
 
-    def forward(self, x, y=None, padding_mask_x=None, padding_mask_y=None):
+    def forward(self, x, y=None, padding_mask_x=None, padding_mask_y=None, logits=True):
         x = self.embed_inputs(x)
         if y is not None:
             y = self.embed_inputs(y)
@@ -198,13 +198,13 @@ class Transformer(nn.Module):
         
         if self.arch == "encoder":
             encoder_output = self.linear(encoder_output)
-            encoder_probs = torch.softmax(encoder_output, dim=-1)
-            return encoder_probs
+            if not logits:
+                encoder_output = torch.softmax(encoder_output, dim=-1)
+            return encoder_output
         decoder_output = self.linear(decoder_output)
-        decoder_probs = torch.softmax(decoder_output, dim=-1)
-        # if self.arch == "decoder":
-        #     return decoder_output
-        return decoder_probs
+        if not logits:
+            decoder_output = torch.softmax(decoder_output, dim=-1)
+        return decoder_output
             
 
     def generate(self):
