@@ -32,12 +32,12 @@ class AttentionHead(nn.Module):
         softmaxed = torch.softmax(scaled, dim=-1)
         if self.masked:  # causal attention
             att_mask = torch.ones_like(softmaxed).tril()
-            softmaxed = softmaxed * att_mask
+            softmaxed = softmaxed * att_mask.detach()
         if padding_mask is not None:
             padding_mask1 = padding_mask.unsqueeze(1)
             padding_mask2 = padding_mask_enc_dec.unsqueeze(1) if enc_dec_layer_input is not None else padding_mask1
             padding_mask = padding_mask1.transpose(-2, -1) @ padding_mask2  # outer product to convert to 2D
-            softmaxed = softmaxed * padding_mask
+            softmaxed = softmaxed * padding_mask.detach()
         attention = softmaxed @ V
         return attention
 
