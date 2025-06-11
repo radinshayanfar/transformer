@@ -36,7 +36,7 @@ class AttentionHead(nn.Module):
         if padding_mask is not None:
             padding_mask1 = padding_mask.unsqueeze(1)
             padding_mask2 = padding_mask_enc_dec.unsqueeze(1) if enc_dec_layer_input is not None else padding_mask1
-            padding_mask = padding_mask1.transpose(-2, -1) @ padding_mask2  # outer product to convert to 2D
+            padding_mask = padding_mask1.transpose(-2, -1).to(torch.float16) @ padding_mask2.to(torch.float16)  # outer product to convert to 2D - float16 for cuda support
             softmaxed = softmaxed * padding_mask.detach()
         attention = softmaxed @ V
         return attention
