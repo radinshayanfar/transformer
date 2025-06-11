@@ -78,6 +78,7 @@ class WMT14TranslationDataset(Dataset):
 
 if __name__ == "__main__":
     tokenizer = Tokenizer.from_file("wmt_bpe_tokenizer.json")
+    tokenizer.enable_truncation(max_length=256)
     dataset = WMT14TranslationDataset(
         split="train",
         pair="de-en",
@@ -107,7 +108,7 @@ if __name__ == "__main__":
 
     history_log = []
 
-    for batch in (pbar := tqdm(dataloader)):
+    for i, batch in enumerate(pbar := tqdm(dataloader)):
         source_ids = batch["source_ids"].to(device)
         source_attention_mask = batch["source_attention_mask"].to(device)
         target_ids = batch["target_ids"].to(device)
@@ -136,6 +137,9 @@ if __name__ == "__main__":
 
         optim.step()
         optim.zero_grad()
+
+        if i % 20 == 0:
+            get_tensor_info()
 
         history_log.append({
             "epoch": 0,
