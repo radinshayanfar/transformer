@@ -5,6 +5,8 @@ from typing import Optional, Literal
 
 from utils import get_positional_encoding_table
 
+import random
+
 
 class AttentionHead(nn.Module):
     def __init__(self, d_model, d_k, masked=False):  # we assume d_k == d_v and only use d_k here
@@ -196,7 +198,36 @@ class Transformer(nn.Module):
         if not logits:
             output = torch.softmax(output, dim=-1)
         return output
-            
 
-    def generate(self):
-        pass
+    def generate(self, eos_token_id, pad_token_id, encoder_x=None, decoder_x=None, enc_pad_mask=None, dec_pad_mask=None):
+        assert self.arch != "encoder", "Auto regressive generation doesn't work with encoder-only models"
+
+        def mask_if_present(x, mask):
+            if x is None:
+                return x
+            return x[mask]
+
+        # print(dec_pad_mask)
+        while True:
+            last_token_index = dec_pad_mask.sum(dim=1) - 1
+            continue_mask = decoder_x[torch.arange(decoder_x.shape[0]), last_token_index] != eos_token_id
+            if not continue_mask.any():
+                break
+
+            if (last_token_index[continue_mask] == decoder_x.shape[1] - 1).any():  # tensor needs to grow - we double in size
+                decoder_x = torch.cat((decoder_x, torch.full_like(decoder_x, pad_token_id)), dim=1)
+                dec_pad_mask = torch.cat((dec_pad_mask, torch.zeros_like(dec_pad_mask)), dim=1)
+            
+            decoder_probs = self(
+                mask_if_present(encoder_x, continue_mask),
+                mask_if_present(decoder_x, continue_mask),
+                mask_if_present(enc_pad_mask, continue_mask),
+                mask_if_present(dec_pad_mask, continue_mask),
+                logits=False,
+            )
+
+            gen_tokens = decoder_probs[torch.arange(decoder_probs.shape[0]), last_token_index[continue_mask]].argmax(dim=-1)  # using greedy decoding
+            decoder_x[continue_mask, last_token_index[continue_mask]+1] = gen_tokens
+            dec_pad_mask[continue_mask, last_token_index[continue_mask]+1] = 1
+        
+        return decoder_x, dec_pad_mask

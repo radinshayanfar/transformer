@@ -43,3 +43,27 @@ def get_positional_encoding_table(max_context_len, d_model):
             table[dim, pos] = sine_func(pos/denom)
     
     return table
+
+
+def pad_and_mask(encodings, tokenizer, pad_token):
+    ids = [torch.tensor(e.ids, dtype=torch.long) for e in encodings]
+    max_len = max(len(x) for x in ids)
+    pad_id = tokenizer.token_to_id(pad_token)
+    input_ids = torch.stack([
+        torch.cat([x, torch.full((max_len - len(x),), pad_id, dtype=torch.long)])
+        for x in ids
+    ])
+    attention_mask = torch.stack([
+        torch.cat([torch.ones(len(x), dtype=torch.long),
+                torch.zeros(max_len - len(x), dtype=torch.long)])
+        for x in ids
+    ])
+    return input_ids, attention_mask
+
+
+def tensor_to_sequence(token_ids, pad_mask):
+    sequences = []
+    for ids, mask in zip(token_ids, pad_mask):
+        trimmed = ids[mask.bool()].tolist()
+        sequences.append(trimmed)
+    return sequences

@@ -1,16 +1,14 @@
 import json
 import torch
 import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 import datasets
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
 from transformer import Transformer
-
-import torch
-from torch.utils.data import Dataset, DataLoader
-from datasets import load_dataset
+from utils import pad_and_mask, tensor_to_sequence
 
 
 class WMT14TranslationDataset(Dataset):
@@ -50,23 +48,8 @@ class WMT14TranslationDataset(Dataset):
         src_enc = tokenizer.encode_batch(src_texts)
         tgt_enc = tokenizer.encode_batch(tgt_texts)
 
-        def pad_and_mask(encodings):
-            ids = [torch.tensor(e.ids, dtype=torch.long) for e in encodings]
-            max_len = max(len(x) for x in ids)
-            pad_id = tokenizer.token_to_id(pad_token)
-            input_ids = torch.stack([
-                torch.cat([x, torch.full((max_len - len(x),), pad_id, dtype=torch.long)])
-                for x in ids
-            ])
-            attention_mask = torch.stack([
-                torch.cat([torch.ones(len(x), dtype=torch.long),
-                        torch.zeros(max_len - len(x), dtype=torch.long)])
-                for x in ids
-            ])
-            return input_ids, attention_mask
-
-        input_ids, input_attention_mask = pad_and_mask(src_enc)
-        labels, labels_attention_mask = pad_and_mask(tgt_enc)
+        input_ids, input_attention_mask = pad_and_mask(src_enc, tokenizer, pad_token)
+        labels, labels_attention_mask = pad_and_mask(tgt_enc, tokenizer, pad_token)
 
         return {
             "source_ids": input_ids,
