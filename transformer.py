@@ -5,8 +5,6 @@ from typing import Optional, Literal
 
 from utils import get_positional_encoding_table
 
-import random
-
 
 class AttentionHead(nn.Module):
     def __init__(self, d_model, d_k, masked=False):  # we assume d_k == d_v and only use d_k here
@@ -199,7 +197,7 @@ class Transformer(nn.Module):
             output = torch.softmax(output, dim=-1)
         return output
 
-    def generate(self, eos_token_id, pad_token_id, encoder_x=None, decoder_x=None, enc_pad_mask=None, dec_pad_mask=None):
+    def generate(self, eos_token_id, pad_token_id, encoder_x=None, decoder_x=None, enc_pad_mask=None, dec_pad_mask=None, max_length=256):
         assert self.arch != "encoder", "Auto regressive generation doesn't work with encoder-only models"
 
         def mask_if_present(x, mask):
@@ -207,9 +205,10 @@ class Transformer(nn.Module):
                 return x
             return x[mask]
 
-        # print(dec_pad_mask)
         while True:
             last_token_index = dec_pad_mask.sum(dim=1) - 1
+            if (last_token_index >= max_length).any():
+                break
             continue_mask = decoder_x[torch.arange(decoder_x.shape[0]), last_token_index] != eos_token_id
             if not continue_mask.any():
                 break
