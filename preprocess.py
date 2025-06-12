@@ -36,7 +36,7 @@ def write_wmt_to_file(split, pair, dirpath="."):
             fp.write("\n")
 
 
-def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_token="[UNK]", special_tokens=["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]"]):
+def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_token="[UNK]", special_tokens=["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]", "[EOS]"]):
     # 1. Initialize a BPE tokenizer
     tokenizer = Tokenizer(BPE(unk_token=unk_token))
 
@@ -67,4 +67,4 @@ def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_toke
 
 write_wmt_to_file("train", "de-en")
 
-train_bpe(["wmt_de-en_train.txt"], 30000)
+train_bpe(["wmt_de-en_train.txt"], 30000, "wmt_bpe_tokenizer.json")
