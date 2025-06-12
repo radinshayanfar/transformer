@@ -1,6 +1,10 @@
 import torch
 import math
 
+def save_args(args, filepath):
+    with open(filepath, 'w') as fp:
+        fp.write(str(args))
+
 def call_on_device(func, device, *args, **kwargs):
     args = list(args)
     for i, arg in enumerate(args):

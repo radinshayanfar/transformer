@@ -1,8 +1,4 @@
 import os
-import argparse
-import torch
-import torch.nn as nn
-import datasets
 from datasets import load_dataset
 from tqdm import tqdm
 
@@ -11,9 +7,6 @@ from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.normalizers import Lowercase, NFD, StripAccents, Sequence
-from tokenizers.processors import TemplateProcessing
-
-from transformer import Transformer
 
 
 def write_wmt_to_file(split, pair, dirpath="."):
@@ -34,6 +27,8 @@ def write_wmt_to_file(split, pair, dirpath="."):
             fp.write("\n")
             fp.write(sent2)
             fp.write("\n")
+    
+    return filepath
 
 
 def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_token="[UNK]", special_tokens=["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]", "[EOS]"]):
@@ -63,8 +58,3 @@ def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_toke
 
     # 6. Save the trained tokenizer
     tokenizer.save(save_path)
-
-
-write_wmt_to_file("train", "de-en")
-
-train_bpe(["wmt_de-en_train.txt"], 30000, "wmt_bpe_tokenizer.json")

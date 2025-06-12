@@ -1,14 +1,16 @@
+import os
 import json
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-import datasets
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tqdm import tqdm
+import argparse
 
 from transformer import Transformer
-from utils import pad_and_mask, tensor_to_sequence
+from utils import pad_and_mask, tensor_to_sequence, save_args
+from preprocess import write_wmt_to_file, train_bpe
 
 
 class WMT14TranslationDataset(Dataset):
@@ -60,23 +62,48 @@ class WMT14TranslationDataset(Dataset):
 
 
 if __name__ == "__main__":
-    tokenizer = Tokenizer.from_file("wmt_bpe_tokenizer.json")
-    tokenizer.enable_truncation(max_length=256)
+    parser = argparse.ArgumentParser("train translation model on WMT")
+    parser.add_argument("--lang_pair", "-p", required=True, type=str, help="WMT dataset language pair")
+    parser.add_argument("--source", "-s", type=str, help="source language. If None, defaults to first in pair")
+    parser.add_argument("--target", "-t", type=str, help="target language. If None, defaults to second in pair")
+    parser.add_argument("--output_dir", "-o", default="wmt", type=str, help="output directory")
+    parser.add_argument("--n_vocab", default=30_000, type=int, help="model vocab size")
+    parser.add_argument("--max_length", default=256, type=int, help="max model context length")
+    parser.add_argument("--batch_size", default=64, type=int, help="batch size")
+    parser.add_argument("--learning_rate", "--lr", default=1e-4, type=float, help="adam learning rate")
+    parser.add_argument("--device", "-d", type=str, help="pytorch device")
+    parser.add_argument("--skip_prep", action="store_true", help="skip preprocessing and tokenizer training - this will OVERWRITE existing files!")
+
+    args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=args.skip_prep)
+    save_args(args, os.path.join(args.output_dir, "args.txt"))
+
+    tokenizer_filepath = os.path.join(args.output_dir, "bpe_tokenizer.json")
+    if not args.skip_prep:
+        filepath = write_wmt_to_file("train", args.lang_pair, dirpath=args.output_dir)
+        train_bpe([filepath], args.n_vocab, tokenizer_filepath)
+
+    tokenizer = Tokenizer.from_file(tokenizer_filepath)
+    tokenizer.enable_truncation(max_length=args.max_length)
+
     dataset = WMT14TranslationDataset(
         split="train",
-        pair="de-en",
-        source_lang="en",
-        target_lang="de"
+        pair=args.lang_pair,
+        source_lang=args.source,
+        target_lang=args.target,
     )
 
     dataloader = DataLoader(
         dataset,
-        batch_size=8,
+        batch_size=args.batch_size,
         shuffle=True,
         collate_fn=lambda x: WMT14TranslationDataset.collate_fn(x, tokenizer)
     )
 
-    if torch.backends.mps.is_available():  # for mac
+    if args.device is not None:
+        device = torch.device(args.device)
+    elif torch.backends.mps.is_available():  # for mac
         device = torch.device("mps")
     elif torch.cuda.is_available():
         device = torch.device("cuda")
@@ -87,7 +114,7 @@ if __name__ == "__main__":
     transformer = transformer.to(device)
 
     loss_fn = nn.CrossEntropyLoss(reduction="none")  # Set reduction to 'none' to get element-wise loss
-    optim = torch.optim.Adam(transformer.parameters(), lr=0.0001)
+    optim = torch.optim.Adam(transformer.parameters(), lr=args.learning_rate)
 
     history_log = []
 
@@ -127,6 +154,6 @@ if __name__ == "__main__":
         })
         pbar.set_description(f"loss: {loss.item():.3f}")
 
-    torch.save(transformer.state_dict(), "wmt_de-en.pt")
-    with open("history.json", 'w') as fp:
+    torch.save(transformer.state_dict(), os.path.join(args.output_dir, "wmt_de-en.pt"))
+    with open(os.path.join(args.output_dir, "history.json"), 'w') as fp:
         json.dump(history_log, fp)
