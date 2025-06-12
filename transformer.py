@@ -178,29 +178,24 @@ class Transformer(nn.Module):
         return input_embs
     
 
-    def forward(self, x, y=None, padding_mask_x=None, padding_mask_y=None, logits=True):
-        x = self.embed_inputs(x)
-        if y is not None:
-            y = self.embed_inputs(y)
+    def forward(self, encoder_x=None, decoder_x=None, enc_pad_mask=None, dec_pad_mask=None, logits=True):
+        assert encoder_x is not None or decoder_x is not None, "Either encoder or decoder should have input"
+        if encoder_x is not None:
+            encoder_x = self.embed_inputs(encoder_x)
+        if decoder_x is not None:
+            decoder_x = self.embed_inputs(decoder_x)
 
         encoder_output = None
         if self.arch != "decoder":
-            encoder_output = self.encoder_stack(x, padding_mask=padding_mask_x)
+            encoder_output = self.encoder_stack(encoder_x, padding_mask=enc_pad_mask)
         if self.arch != "encoder":
-            dec_input = x if self.arch == "decoder" else y
-            padding_mask_dec = padding_mask_x if self.arch == "decoder" else padding_mask_y
-            padding_mask_enc = padding_mask_x if self.arch != "decoder" else None
-            decoder_output = self.decoder_stack(dec_input, encoder_output, padding_mask_x=padding_mask_dec, padding_mask_enc_dec=padding_mask_enc)
+            decoder_output = self.decoder_stack(decoder_x, encoder_output, padding_mask_x=dec_pad_mask, padding_mask_enc_dec=enc_pad_mask)
         
-        if self.arch == "encoder":
-            encoder_output = self.linear(encoder_output)
-            if not logits:
-                encoder_output = torch.softmax(encoder_output, dim=-1)
-            return encoder_output
-        decoder_output = self.linear(decoder_output)
+        output = encoder_output if self.arch == "encoder" else decoder_output
+        output = self.linear(output)
         if not logits:
-            decoder_output = torch.softmax(decoder_output, dim=-1)
-        return decoder_output
+            output = torch.softmax(output, dim=-1)
+        return output
             
 
     def generate(self):

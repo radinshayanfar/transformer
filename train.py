@@ -115,10 +115,10 @@ if __name__ == "__main__":
         target_attention_mask = batch["target_attention_mask"].to(device)
 
         output = transformer(
-            source_ids,
-            target_ids[:, :-1],  # dropping EOS token as input
-            padding_mask_x=source_attention_mask,
-            padding_mask_y=target_attention_mask[:, :-1],
+            encoder_x=source_ids,
+            decoder_x=target_ids[:, :-1],  # dropping EOS token as input
+            enc_pad_mask=source_attention_mask,
+            dec_pad_mask=target_attention_mask[:, :-1],
         )
 
         labels, labels_mask = target_ids[:, 1:], target_attention_mask[:, 1:]  # dropping SEP for labels
@@ -137,9 +137,6 @@ if __name__ == "__main__":
 
         optim.step()
         optim.zero_grad()
-
-        if i % 20 == 0:
-            get_tensor_info()
 
         history_log.append({
             "epoch": 0,
