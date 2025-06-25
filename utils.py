@@ -46,7 +46,7 @@ def get_positional_encoding_table(max_context_len, d_model):
         for pos in range(max_context_len):
             table[dim, pos] = sine_func(pos/denom)
     
-    return table
+    return table.T
 
 
 def pad_and_mask(encodings, tokenizer, pad_token):

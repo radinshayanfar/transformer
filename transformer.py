@@ -165,16 +165,18 @@ class Transformer(nn.Module):
         if self.arch != "encoder":
             self.decoder_stack = DecoderStack(n_blocks, h, d_model, d_k, d_ff, True if self.arch == "decoder" else False)
 
-        self.pos_emb_table = get_positional_encoding_table(max_context_len, d_model)
+        self.pos_emb_table = nn.Parameter(get_positional_encoding_table(max_context_len, d_model), requires_grad=False)
 
         self.emb_table = nn.Parameter(torch.randn((d_model, n_vocab)))
 
         self.linear = nn.Linear(d_model, n_vocab)
 
     
-    def embed_inputs(self, input_ids):
+    def embed_inputs(self, input_ids, pos_emb=True):
         B, L = input_ids.shape
         input_embs = self.emb_table[:, input_ids.reshape(-1)].T.reshape(B, L, -1)
+        if pos_emb:
+            input_embs = input_embs + self.pos_emb_table[:L, :]
         return input_embs
     
 
