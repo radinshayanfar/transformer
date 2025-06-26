@@ -61,6 +61,46 @@ class WMT14TranslationDataset(Dataset):
         }
 
 
+@torch.no_grad()
+def evaluate(model, test_dataloader, device):
+    model.eval()
+    
+    loss_fn = nn.CrossEntropyLoss(reduction="none")  # Set reduction to 'none' to get element-wise loss
+    running_loss_sum = 0.0
+    for batch in tqdm(test_dataloader, desc="Evaluating"):
+        source_ids = batch["source_ids"].to(device)
+        source_attention_mask = batch["source_attention_mask"].to(device)
+        target_ids = batch["target_ids"].to(device)
+        target_attention_mask = batch["target_attention_mask"].to(device)
+
+        output = model(
+            encoder_x=source_ids,
+            decoder_x=target_ids[:, :-1],  # dropping EOS token as input
+            enc_pad_mask=source_attention_mask,
+            dec_pad_mask=target_attention_mask[:, :-1],
+        )
+
+        labels, labels_mask = target_ids[:, 1:], target_attention_mask[:, 1:]  # dropping SEP for labels
+        # labels = nn.functional.one_hot(labels, num_classes=tokenizer.get_vocab_size()).to(torch.float)
+        labels = labels.long()  # this seems to be more efficient
+
+        labels = labels.reshape(-1)
+        output = output.reshape(-1, output.shape[-1])
+        labels_mask = labels_mask.reshape(-1)
+
+        loss = loss_fn(output, labels)
+        loss = loss * labels_mask
+        loss = loss.sum() / labels_mask.sum()
+
+        running_loss_sum += loss.item()
+
+    model.train()
+
+    print(running_loss_sum)
+
+    return running_loss_sum / len(test_dataloader)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("train translation model on WMT")
     parser.add_argument("--lang_pair", "-p", required=True, type=str, help="WMT dataset language pair")
@@ -70,6 +110,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_vocab", default=30_000, type=int, help="model vocab size")
     parser.add_argument("--max_length", default=256, type=int, help="max model context length")
     parser.add_argument("--batch_size", default=64, type=int, help="batch size")
+    parser.add_argument("--eval_steps", default=400_000, type=int, help="number of steps between evaluations")
     parser.add_argument("--learning_rate", "--lr", default=1e-4, type=float, help="adam learning rate")
     parser.add_argument("--device", "-d", type=str, help="pytorch device")
     parser.add_argument("--skip_prep", action="store_true", help="skip preprocessing and tokenizer training - this will OVERWRITE existing files!")
@@ -87,15 +128,27 @@ if __name__ == "__main__":
     tokenizer = Tokenizer.from_file(tokenizer_filepath)
     tokenizer.enable_truncation(max_length=args.max_length)
 
-    dataset = WMT14TranslationDataset(
+    train_dataset = WMT14TranslationDataset(
         split="train",
         pair=args.lang_pair,
         source_lang=args.source,
         target_lang=args.target,
     )
+    test_dataset = WMT14TranslationDataset(
+        split="test",
+        pair=args.lang_pair,
+        source_lang=args.source,
+        target_lang=args.target,
+    )
 
-    dataloader = DataLoader(
-        dataset,
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=lambda x: WMT14TranslationDataset.collate_fn(x, tokenizer)
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=lambda x: WMT14TranslationDataset.collate_fn(x, tokenizer)
@@ -117,8 +170,9 @@ if __name__ == "__main__":
     optim = torch.optim.Adam(transformer.parameters(), lr=args.learning_rate)
 
     history_log = []
+    eval_loss = None
 
-    for i, batch in enumerate(pbar := tqdm(dataloader)):
+    for i, batch in enumerate(pbar := tqdm(train_dataloader)):
         source_ids = batch["source_ids"].to(device)
         source_attention_mask = batch["source_attention_mask"].to(device)
         target_ids = batch["target_ids"].to(device)
@@ -148,9 +202,15 @@ if __name__ == "__main__":
         optim.step()
         optim.zero_grad()
 
+        if (i + 1) % (args.eval_steps // args.batch_size) == 0:
+            print(f"Evaluating at step {i * args.batch_size}...")
+            eval_loss = evaluate(transformer, test_dataloader, device)
+            print(f"Evaluation loss: {eval_loss:.3f}")
+
         history_log.append({
             "epoch": 0,
-            "loss": loss.item()
+            "loss": loss.item(),
+            "eval_loss": eval_loss,
         })
         pbar.set_description(f"loss: {loss.item():.3f}")
 
