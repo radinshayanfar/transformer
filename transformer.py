@@ -68,11 +68,13 @@ class EncoderBlock(nn.Module):
 
         self.layer_norm1 = nn.LayerNorm(d_model)
         self.layer_norm2 = nn.LayerNorm(d_model)
+
+        self.dropout = nn.Dropout(0.1)
     
     def forward(self, x, padding_mask=None):
         z = self.mult_head_att(x, padding_mask=padding_mask)
+        z = self.dropout(z)
         x = self.layer_norm1(z + x)
-        # TODO: apply dropout to x
         
         # add a dummy dim for conv layers
         B, L = x.shape[:2]
@@ -81,7 +83,7 @@ class EncoderBlock(nn.Module):
         y = self.ffn_l2(y)
         y = y.squeeze()
         y = y.reshape(B, L, *y.shape[1:])
-        # TODO: apply dropout to y
+        y = self.dropout(y)
 
         x = self.layer_norm2(y + x)
 
@@ -105,17 +107,19 @@ class DecoderBlock(nn.Module):
         if not self.decoder_only:
             self.encdec_att = MultiHeadAttention(h, d_model, d_k)
             self.layer_norm2 = nn.LayerNorm(d_model)
+        
+        self.dropout = nn.Dropout(0.1)
     
     def forward(self, x, enc_dec_layer_input=None, padding_mask_x=None, padding_mask_enc_dec=None):
         assert self.decoder_only or enc_dec_layer_input is not None, "enc_dec_layer_input should be provided in non-decoder only blocks"
         z = self.masked_att(x, padding_mask=padding_mask_x)
+        z = self.dropout(z)
         x = self.layer_norm1(z + x)
-        # TODO: apply dropout to x
 
         if not self.decoder_only:
             z = self.encdec_att(x, enc_dec_layer_input, padding_mask=padding_mask_x, padding_mask_enc_dec=padding_mask_enc_dec)
+            z = self.dropout(z)
             x = self.layer_norm2(z + x)
-            # TODO: apply dropout to x
         
         # add a dummy dim for conv layers
         B, L = x.shape[:2]
@@ -124,7 +128,7 @@ class DecoderBlock(nn.Module):
         y = self.ffn_l2(y)
         y = y.squeeze()
         y = y.reshape(B, L, *y.shape[1:])
-        # TODO: apply dropout to y
+        y = self.dropout(y)
 
         x = self.layer_norm3(y + x)
 
@@ -171,7 +175,9 @@ class Transformer(nn.Module):
 
         self.linear = nn.Linear(d_model, n_vocab)
 
-    
+        self.dropout = nn.Dropout(0.1)
+
+
     def embed_inputs(self, input_ids, pos_emb=True):
         B, L = input_ids.shape
         input_embs = self.emb_table[:, input_ids.reshape(-1)].T.reshape(B, L, -1)
@@ -184,8 +190,10 @@ class Transformer(nn.Module):
         assert encoder_x is not None or decoder_x is not None, "Either encoder or decoder should have input"
         if encoder_x is not None:
             encoder_x = self.embed_inputs(encoder_x)
+            encoder_x = self.dropout(encoder_x)
         if decoder_x is not None:
             decoder_x = self.embed_inputs(decoder_x)
+            decoder_x = self.dropout(decoder_x)
 
         encoder_output = None
         if self.arch != "decoder":
@@ -199,6 +207,7 @@ class Transformer(nn.Module):
             output = torch.softmax(output, dim=-1)
         return output
 
+    @torch.no_grad()
     def generate(self, eos_token_id, pad_token_id, encoder_x=None, decoder_x=None, enc_pad_mask=None, dec_pad_mask=None, max_length=256):
         assert self.arch != "encoder", "Auto regressive generation doesn't work with encoder-only models"
 
