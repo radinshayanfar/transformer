@@ -166,7 +166,7 @@ if __name__ == "__main__":
     transformer = Transformer(6, 8, 512, 64, 2048, tokenizer.get_vocab_size(), 1024, arch="both")
     transformer = transformer.to(device)
 
-    loss_fn = nn.CrossEntropyLoss(reduction="none")  # Set reduction to 'none' to get element-wise loss
+    loss_fn = nn.CrossEntropyLoss(reduction="none", label_smoothing=0.1)  # Set reduction to 'none' to get element-wise loss
     optim = torch.optim.Adam(transformer.parameters(), lr=args.learning_rate)
 
     history_log = []
