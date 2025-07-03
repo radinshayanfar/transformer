@@ -96,8 +96,6 @@ def evaluate(model, test_dataloader, device):
 
     model.train()
 
-    print(running_loss_sum)
-
     return running_loss_sum / len(test_dataloader)
 
 

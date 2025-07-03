@@ -28,17 +28,27 @@ class AttentionHead(nn.Module):
         
         # print("Q", Q.shape, "K", K.shape, "K.T", K.transpose(-2, -1).shape, "V", V.shape)
         scaled = (Q @ K.transpose(-2, -1)) / self.scale
-        # softmaxing the scores accros each token, so that each row sums to 1
-        softmaxed = torch.softmax(scaled, dim=-1)
-        if self.masked:  # causal attention
-            att_mask = torch.ones_like(softmaxed).tril()
-            softmaxed = softmaxed * att_mask.detach()
+        if self.masked:  # set next tokens to -inf for decoder blocks
+            att_mask = torch.full_like(scaled, float("-inf")).triu(1)  # setting diagonal to 1 to exclude the main diagonal
+            scaled = scaled + att_mask.detach()
         if padding_mask is not None:
             padding_mask1 = padding_mask.unsqueeze(1)
             padding_mask2 = padding_mask_enc_dec.unsqueeze(1) if enc_dec_layer_input is not None else padding_mask1
             padding_mask = padding_mask1.transpose(-2, -1).to(torch.float16) @ padding_mask2.to(torch.float16)  # outer product to convert to 2D - float16 for cuda support
-            softmaxed = softmaxed * padding_mask.detach()
-        attention = softmaxed @ V
+            padding_mask = padding_mask.float()
+            
+            # this is to prevent rows with all zero to become all nan after softmax
+            zero_rows = (padding_mask.sum(dim=-1) == 0)
+            mask = zero_rows.unsqueeze(-1).expand_as(padding_mask)
+            padding_mask[mask] = 1.
+
+            padding_mask_check = padding_mask.int()
+            padding_mask[padding_mask_check == 0] = float("-inf")
+            padding_mask[padding_mask_check == 1] = 0
+            scaled = scaled + padding_mask.detach()
+        # softmaxing the scores across each token, so that each row sums to 1
+        attention = torch.softmax(scaled, dim=-1) @ V
+        # attention = attention.nan_to_num()  # to prevent nan to propagate to other positions in multihead linear layer - THIS WILL NOT WORK WITH BACKPROPAGATION
         return attention
 
 
