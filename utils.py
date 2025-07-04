@@ -71,3 +71,7 @@ def tensor_to_sequence(token_ids, pad_mask):
         trimmed = ids[mask.bool()].tolist()
         sequences.append(trimmed)
     return sequences
+
+def ids_to_tokens(sequence, tokenizer, remove_eos="[EOS]"):
+    eos_token = tokenizer.token_to_id(remove_eos) if remove_eos is not None else -1
+    return [tokenizer.id_to_token(i) for i in sequence if i != eos_token]

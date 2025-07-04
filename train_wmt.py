@@ -7,9 +7,10 @@ from datasets import load_dataset
 from tokenizers import Tokenizer
 from tqdm import tqdm
 import argparse
+from nltk.translate.bleu_score import corpus_bleu
 
 from transformer import Transformer
-from utils import pad_and_mask, tensor_to_sequence, save_args
+from utils import pad_and_mask, tensor_to_sequence, ids_to_tokens, save_args
 from preprocess import write_wmt_to_file, train_bpe
 
 
@@ -67,6 +68,9 @@ def evaluate(model, test_dataloader, device):
     
     loss_fn = nn.CrossEntropyLoss(reduction="none")  # Set reduction to 'none' to get element-wise loss
     running_loss_sum = 0.0
+
+    generations_refs = []
+    generations_hyps = []
     for batch in tqdm(test_dataloader, desc="Evaluating"):
         source_ids = batch["source_ids"].to(device)
         source_attention_mask = batch["source_attention_mask"].to(device)
@@ -94,9 +98,28 @@ def evaluate(model, test_dataloader, device):
 
         running_loss_sum += loss.item()
 
+        dec_tokens, dec_mask = transformer.generate(
+            tokenizer.token_to_id("[EOS]"),
+            tokenizer.token_to_id("[PAD]"),
+            encoder_x=source_ids,
+            decoder_x=target_ids[:, :1],  # keeping the first token
+            enc_pad_mask=source_attention_mask,
+            dec_pad_mask=target_attention_mask[:, :1],
+        )
+
+        generated_ids = tensor_to_sequence(dec_tokens, dec_mask)
+        target_ids_seq = tensor_to_sequence(target_ids, target_attention_mask)
+        generations_hyps.extend([[ids_to_tokens(seq, tokenizer)] for seq in target_ids_seq])
+        generations_refs.extend([ids_to_tokens(seq, tokenizer) for seq in generated_ids])
+    
+    bleu = corpus_bleu(
+        generations_hyps,
+        generations_refs
+    )
+
     model.train()
 
-    return running_loss_sum / len(test_dataloader)
+    return running_loss_sum / len(test_dataloader), bleu
 
 
 if __name__ == "__main__":
@@ -132,6 +155,12 @@ if __name__ == "__main__":
         source_lang=args.source,
         target_lang=args.target,
     )
+    val_dataset = WMT14TranslationDataset(
+        split="validation",
+        pair=args.lang_pair,
+        source_lang=args.source,
+        target_lang=args.target,
+    )
     test_dataset = WMT14TranslationDataset(
         split="test",
         pair=args.lang_pair,
@@ -141,6 +170,12 @@ if __name__ == "__main__":
 
     train_dataloader = DataLoader(
         train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=lambda x: WMT14TranslationDataset.collate_fn(x, tokenizer)
+    )
+    val_dataloader = DataLoader(
+        val_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=lambda x: WMT14TranslationDataset.collate_fn(x, tokenizer)
@@ -192,7 +227,7 @@ if __name__ == "__main__":
         labels_mask = labels_mask.reshape(-1)
 
         loss = loss_fn(output, labels)
-        loss = loss * labels_mask
+        loss = loss * labels_mask.detach()
         loss = loss.sum() / labels_mask.sum()
 
         loss.backward()
@@ -200,18 +235,31 @@ if __name__ == "__main__":
         optim.step()
         optim.zero_grad()
 
-        if (i + 1) % (args.eval_steps // args.batch_size) == 0:
+        if i % (args.eval_steps // args.batch_size) == 0:
             print(f"Evaluating at step {i * args.batch_size}...")
-            eval_loss = evaluate(transformer, test_dataloader, device)
-            print(f"Evaluation loss: {eval_loss:.3f}")
+            val_loss, val_bleu = evaluate(transformer, val_dataloader, device)
+            print(f"Validation loss: {val_loss:.3f}, Validation BLEU: {val_bleu:.3f}")
 
-        history_log.append({
-            "epoch": 0,
-            "loss": loss.item(),
-            "eval_loss": eval_loss,
-        })
+            history_log.append({
+                "epoch": 0,
+                "step": i * args.batch_size,
+                "loss": loss.item(),
+                "val_loss": val_loss,
+                "val_bleu": val_bleu,
+            })
+        
         pbar.set_description(f"loss: {loss.item():.3f}")
+    
+    test_loss, test_bleu = evaluate(transformer, test_dataloader, device)
+    print(f"Test loss: {test_loss:.3f}, Test BLEU: {test_bleu:.3f}")
 
     torch.save(transformer.state_dict(), os.path.join(args.output_dir, "wmt_de-en.pt"))
     with open(os.path.join(args.output_dir, "history.json"), 'w') as fp:
         json.dump(history_log, fp)
+    with open(os.path.join(args.output_dir, "results.json"), 'w') as fp:
+        json.dump({
+            "test_loss": test_loss,
+            "test_bleu": test_bleu,
+            "val_loss": history_log[-1]["val_loss"],
+            "val_bleu": history_log[-1]["val_bleu"],
+        }, fp)
