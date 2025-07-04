@@ -63,7 +63,7 @@ class WMT14TranslationDataset(Dataset):
 
 
 @torch.no_grad()
-def evaluate(model, test_dataloader, device):
+def evaluate(model, test_dataloader, device, generation_eval=False):
     model.eval()
     
     loss_fn = nn.CrossEntropyLoss(reduction="none")  # Set reduction to 'none' to get element-wise loss
@@ -98,28 +98,33 @@ def evaluate(model, test_dataloader, device):
 
         running_loss_sum += loss.item()
 
-        dec_tokens, dec_mask = transformer.generate(
-            tokenizer.token_to_id("[EOS]"),
-            tokenizer.token_to_id("[PAD]"),
-            encoder_x=source_ids,
-            decoder_x=target_ids[:, :1],  # keeping the first token
-            enc_pad_mask=source_attention_mask,
-            dec_pad_mask=target_attention_mask[:, :1],
-        )
+        if generation_eval:
+            dec_tokens, dec_mask = transformer.generate(
+                tokenizer.token_to_id("[EOS]"),
+                tokenizer.token_to_id("[PAD]"),
+                encoder_x=source_ids,
+                decoder_x=target_ids[:, :1],  # keeping the first token
+                enc_pad_mask=source_attention_mask,
+                dec_pad_mask=target_attention_mask[:, :1],
+            )
 
-        generated_ids = tensor_to_sequence(dec_tokens, dec_mask)
-        target_ids_seq = tensor_to_sequence(target_ids, target_attention_mask)
-        generations_hyps.extend([[ids_to_tokens(seq, tokenizer)] for seq in target_ids_seq])
-        generations_refs.extend([ids_to_tokens(seq, tokenizer) for seq in generated_ids])
+            generated_ids = tensor_to_sequence(dec_tokens, dec_mask)
+            target_ids_seq = tensor_to_sequence(target_ids, target_attention_mask)
+            generations_hyps.extend([[ids_to_tokens(seq, tokenizer)] for seq in target_ids_seq])
+            generations_refs.extend([ids_to_tokens(seq, tokenizer) for seq in generated_ids])
     
-    bleu = corpus_bleu(
-        generations_hyps,
-        generations_refs
-    )
-
     model.train()
 
-    return running_loss_sum / len(test_dataloader), bleu
+    loss = running_loss_sum / len(test_dataloader)
+
+    if generation_eval:
+        bleu = corpus_bleu(
+            generations_hyps,
+            generations_refs
+        )
+        return loss, bleu
+
+    return loss
 
 
 if __name__ == "__main__":
@@ -237,20 +242,19 @@ if __name__ == "__main__":
 
         if i % (args.eval_steps // args.batch_size) == 0:
             print(f"Evaluating at step {i * args.batch_size}...")
-            val_loss, val_bleu = evaluate(transformer, val_dataloader, device)
-            print(f"Validation loss: {val_loss:.3f}, Validation BLEU: {val_bleu:.3f}")
+            val_loss = evaluate(transformer, val_dataloader, device)
+            print(f"Validation loss: {val_loss:.3f}")
 
             history_log.append({
                 "epoch": 0,
                 "step": i * args.batch_size,
                 "loss": loss.item(),
                 "val_loss": val_loss,
-                "val_bleu": val_bleu,
             })
         
         pbar.set_description(f"loss: {loss.item():.3f}")
     
-    test_loss, test_bleu = evaluate(transformer, test_dataloader, device)
+    test_loss, test_bleu = evaluate(transformer, test_dataloader, device, generation_eval=True)
     print(f"Test loss: {test_loss:.3f}, Test BLEU: {test_bleu:.3f}")
 
     torch.save(transformer.state_dict(), os.path.join(args.output_dir, f"wmt_{args.source}-{args.target}.pt"))
@@ -261,5 +265,4 @@ if __name__ == "__main__":
             "test_loss": test_loss,
             "test_bleu": test_bleu,
             "val_loss": history_log[-1]["val_loss"],
-            "val_bleu": history_log[-1]["val_bleu"],
         }, fp)
