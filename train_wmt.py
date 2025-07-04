@@ -253,10 +253,10 @@ if __name__ == "__main__":
     test_loss, test_bleu = evaluate(transformer, test_dataloader, device)
     print(f"Test loss: {test_loss:.3f}, Test BLEU: {test_bleu:.3f}")
 
-    torch.save(transformer.state_dict(), os.path.join(args.output_dir, "wmt_de-en.pt"))
-    with open(os.path.join(args.output_dir, "history.json"), 'w') as fp:
+    torch.save(transformer.state_dict(), os.path.join(args.output_dir, f"wmt_{args.source}-{args.target}.pt"))
+    with open(os.path.join(args.output_dir, f"history_{args.source}-{args.target}.json"), 'w') as fp:
         json.dump(history_log, fp)
-    with open(os.path.join(args.output_dir, "results.json"), 'w') as fp:
+    with open(os.path.join(args.output_dir, f"results_{args.source}-{args.target}.json"), 'w') as fp:
         json.dump({
             "test_loss": test_loss,
             "test_bleu": test_bleu,
