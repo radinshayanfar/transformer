@@ -31,7 +31,27 @@ def write_wmt_to_file(split, pair, dirpath="."):
     return filepath
 
 
-def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_token="[UNK]", special_tokens=["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]", "[EOS]"]):
+def write_wikitext_to_file(split, subset, dirpath="."):
+    filepath = os.path.join(dirpath, f"wikitext_{subset}.txt")
+    if os.path.exists(filepath):
+        print("Skipping dataset prep - file already exists")
+        return
+
+    ds = load_dataset("Salesforce/wikitext", subset, split=split)
+
+    os.makedirs(dirpath, exist_ok=True)
+    with open(filepath, 'w') as fp:
+        for row in tqdm(ds):
+            # Only write non-empty text rows
+            if not row["text"].strip():
+                continue
+            fp.write(row["text"])
+            fp.write("\n")
+    
+    return filepath
+
+
+def train_bpe(corpus_files, vocab_size, save_path="bpe_tokenizer.json", unk_token="[UNK]", special_tokens=["[UNK]", "[PAD]", "[CLS]", "[SEP]", "[MASK]", "[EOS]", "[BOS]"]):
     # 1. Initialize a BPE tokenizer
     tokenizer = Tokenizer(BPE(unk_token=unk_token))
 
