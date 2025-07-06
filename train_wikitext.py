@@ -151,7 +151,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    transformer = Transformer(6, 8, 512, 64, 2048, tokenizer.get_vocab_size(), 1024, arch="decoder")
+    transformer = Transformer(12, 8, 768, 64, 2048, tokenizer.get_vocab_size(), args.max_length, arch="decoder")
     transformer = transformer.to(device)
 
     loss_fn = nn.CrossEntropyLoss(reduction="none", label_smoothing=0.1)  # Set reduction to 'none' to get element-wise loss
