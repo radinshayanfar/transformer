@@ -7,11 +7,14 @@ from datasets import load_dataset
 from tokenizers import Tokenizer
 from tqdm import tqdm
 import argparse
+import re
 
 from transformer import Transformer
 from utils import pad_and_mask, save_args
 from preprocess import write_wikitext_to_file, train_bpe
 
+regex = re.compile(r"^ ?(= )+(.+) ?(= ?)+$", flags=re.MULTILINE)
+subst = "\\2"
 
 class WikiTextDataset(Dataset):
     def __init__(self, split, subset):
@@ -28,6 +31,7 @@ class WikiTextDataset(Dataset):
 
     def __getitem__(self, idx):
         text = self.dataset[idx]["text"]
+        text = re.sub(regex, subst, text, 1)  # remove headings' equal signs as it will make generation problematic
         return {
             "text": text,
         }
