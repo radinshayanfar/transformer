@@ -37,7 +37,22 @@ This result is achieved under significantly minimal tuning:
 
 Despite the simplicity, the implementation reaches a strong baseline close to the original paper’s result, validating the correctness and robustness of the codebase.
 
-📌 More tasks training script will be coming soon, following the same architectural foundation.
+---
+
+## ✍️ Text Generation (WikiText)
+
+The repository also supports training a decoder-only Transformer for text generation, using the WikiText-103-raw-v1 dataset. The architecture closely follows the smallest GPT-2 configuration described in the original paper, but it is trained directly on WikiText, not via zero-shot transfer.
+
+To train the model:
+```bash
+python train_wikitext.py
+```
+
+📊 Results
+- Test Perplexity: 4.18
+- (GPT-2 was trained on WebText and evaluated in a zero-shot setup, therefore, not directly comparable here)
+
+This experiment demonstrates the extensibility of the core Transformer implementation to causal language modeling tasks. The model learns to generate Wikipedia-like English text purely from scratch training.
 
 ---
 
