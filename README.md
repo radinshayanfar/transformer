@@ -26,8 +26,12 @@ python train_wmt.py --pair de-en --source en --target de
 ```
 
 📊 Results
-- BLEU score (EN→DE): 22.6
-- Reference (Vaswani et al., 2017): 27.3
+
+| Language Pair | Perplexity   | BLEU Score   | Reference BLEU (Vaswani et al., 2017) |
+|---------------|--------------|--------------|----------------------------------------|
+| EN → DE       | 2.30         | 22.6         | 27.3                                   |
+| DE → EN       | 2.19         | 25.6         | —                                      |
+| EN → FR       | Coming soon  | Coming soon  | 41.0                                   |
 
 This result is achieved under significantly minimal tuning:
 - No learning rate scheduling or warm-up tuning
@@ -41,7 +45,7 @@ Despite the simplicity, the implementation reaches a strong baseline close to th
 
 ## ✍️ Text Generation (WikiText)
 
-The repository also supports training a decoder-only Transformer for text generation, using the WikiText-103-raw-v1 dataset. The architecture closely follows the smallest GPT-2 configuration described in the original paper, but it is trained directly on WikiText, not via zero-shot transfer.
+The repository also supports training a decoder-only Transformer for text generation, using the WikiText-103-raw-v1 dataset. The architecture closely follows the smallest GPT-2 configuration described in the [original paper](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf), but it is trained directly on WikiText, not via zero-shot transfer.
 
 To train the model:
 ```bash
