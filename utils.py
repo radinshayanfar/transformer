@@ -1,9 +1,38 @@
+import os
 import torch
 import math
 
 def save_args(args, filepath):
     with open(filepath, 'w') as fp:
         fp.write(str(args))
+
+def set_seed(seed=0):
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    # random.seed(seed)
+    # np.random.seed(seed)
+
+def load_checkpoint(filepath, model, optim, device):
+    if not os.path.exists(filepath):
+        print("No checkpoint found at", filepath)
+        return 0
+    print("Loading checkpoint from", filepath)
+    checkpoint = torch.load(filepath, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optim.load_state_dict(checkpoint["optim_state_dict"])
+    batch = checkpoint["batch"]
+    return batch
+
+def save_checkpoint(filepath, model, optim, batch):
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "optim_state_dict": optim.state_dict(),
+        "batch": batch,
+    }, filepath)
+    print("Checkpoint saved to", filepath, "at batch", batch)
 
 def call_on_device(func, device, *args, **kwargs):
     args = list(args)

@@ -10,7 +10,7 @@ import argparse
 import re
 
 from transformer import Transformer
-from utils import pad_and_mask, save_args
+from utils import pad_and_mask, save_args, set_seed, load_checkpoint, save_checkpoint
 from preprocess import write_wikitext_to_file, train_bpe
 
 regex = re.compile(r"^ ?(= )+(.+) ?(= ?)+$", flags=re.MULTILINE)
@@ -100,8 +100,11 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", "--lr", default=1e-4, type=float, help="adam learning rate")
     parser.add_argument("--device", "-d", type=str, help="pytorch device")
     parser.add_argument("--skip_prep", action="store_true", help="skip preprocessing and tokenizer training - this will OVERWRITE existing files!")
+    parser.add_argument("--load_checkpoint", action="store_true", help="load model checkpoint from output_dir if exists")
 
     args = parser.parse_args()
+
+    set_seed(0)  # for reproducibility
 
     os.makedirs(args.output_dir, exist_ok=args.skip_prep)
     save_args(args, os.path.join(args.output_dir, "args.txt"))
@@ -161,10 +164,18 @@ if __name__ == "__main__":
     loss_fn = nn.CrossEntropyLoss(reduction="none", label_smoothing=0.1)  # Set reduction to 'none' to get element-wise loss
     optim = torch.optim.Adam(transformer.parameters(), lr=args.learning_rate)
 
+    checkpoint_path = os.path.join(args.output_dir, "checkpoint.pt")
+    start_batch = None
+    if args.load_checkpoint:
+        start_batch = load_checkpoint(checkpoint_path, transformer, optim, device)
+        print(f"Resuming training from batch {start_batch}...")
+
     history_log = []
     eval_loss = None
 
     for i, batch in enumerate(pbar := tqdm(train_dataloader)):
+        if start_batch and i < start_batch:
+            continue
         text_ids = batch["texts"].to(device)
         attention_mask = batch["attention_mask"].to(device)
 
@@ -201,6 +212,9 @@ if __name__ == "__main__":
                 "loss": loss.item(),
                 "val_loss": val_loss,
             })
+
+            print(f"Saving checkpoint to {checkpoint_path}...")
+            save_checkpoint(checkpoint_path, transformer, optim, i+1)
         
         pbar.set_description(f"loss: {loss.item():.3f}")
 
