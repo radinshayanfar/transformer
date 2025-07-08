@@ -210,7 +210,7 @@ if __name__ == "__main__":
     loss_fn = nn.CrossEntropyLoss(reduction="none", label_smoothing=0.1)  # Set reduction to 'none' to get element-wise loss
     optim = torch.optim.Adam(transformer.parameters(), lr=args.learning_rate)
 
-    checkpoint_path = os.path.join(args.output_dir, "checkpoint.pt")
+    checkpoint_path = os.path.join(args.output_dir, f"checkpoint_{args.source}-{args.target}.pt")
     start_batch = None
     if args.load_checkpoint:
         start_batch = load_checkpoint(checkpoint_path, transformer, optim, device)
