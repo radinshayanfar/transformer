@@ -233,7 +233,7 @@ class Transformer(nn.Module):
 
         while True:
             last_token_index = dec_pad_mask.sum(dim=1) - 1
-            if (last_token_index >= max_length).any():
+            if (last_token_index + 1 >= max_length).any():  # we generate one less token than max_length for code simplicity
                 break
             continue_mask = decoder_x[torch.arange(decoder_x.shape[0]), last_token_index] != eos_token_id
             if not continue_mask.any():
