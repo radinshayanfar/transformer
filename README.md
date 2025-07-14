@@ -25,7 +25,7 @@ To train a translation model using the WMT dataset (e.g., English to German):
 python train_wmt.py --pair de-en --source en --target de
 ```
 
-📊 Results
+**📊 Results**
 
 | Language Pair | Perplexity   | BLEU Score   | Reference BLEU (Vaswani et al., 2017) |
 |---------------|--------------|--------------|----------------------------------------|
@@ -52,11 +52,40 @@ To train the model:
 python train_wikitext.py
 ```
 
-📊 Results
+**📊 Results**
 - Test Perplexity: 4.18
 - (GPT-2 was trained on WebText and evaluated in a zero-shot setup, therefore, not directly comparable here)
 
 This experiment demonstrates the extensibility of the core Transformer implementation to causal language modeling tasks. The model learns to generate Wikipedia-like English text purely from scratch training.
+
+---
+
+## 🧾 Text Generation (OpenWebText, GPT-2)
+
+This task trains a GPT-2-style decoder-only Transformer on the OpenWebText dataset — a public replication of the WebText corpus used in the original GPT-2 paper:
+[Language Models are Unsupervised Multitask Learners](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
+
+**🛠 Dataset Preparation**
+
+Download and preprocess the dataset with:
+
+```bash
+python prepare_webtext.py --save_dir "<dataset_save_dir>"
+```
+
+**🚀 Training**
+
+Once prepared, train the model using:
+
+```bash
+python train_webtext.py --ds_path "<dataset_save_dir>"
+```
+
+**🔧 Notes**
+- Uses the GPT-2 tokenizer (via HuggingFace) for simplicity and speed.
+- Trains only on the first 256 tokens of each example (for efficiency).
+- Architecture mirrors the smallest GPT-2 model described in the original paper.
+- Focuses on proof-of-concept and scalability, not direct reproduction of results.
 
 ---
 
