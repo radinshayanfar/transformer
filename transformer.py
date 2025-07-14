@@ -225,6 +225,11 @@ class Transformer(nn.Module):
             if x is None:
                 return x
             return x[mask]
+        
+        def clip_tokens(tokens):
+            if tokens.shape[1] > max_length:
+                return tokens[:, :max_length]
+            return tokens
 
         while True:
             last_token_index = dec_pad_mask.sum(dim=1) - 1
@@ -237,6 +242,8 @@ class Transformer(nn.Module):
             if (last_token_index[continue_mask] == decoder_x.shape[1] - 1).any():  # tensor needs to grow - we double in size
                 decoder_x = torch.cat((decoder_x, torch.full_like(decoder_x, pad_token_id)), dim=1)
                 dec_pad_mask = torch.cat((dec_pad_mask, torch.zeros_like(dec_pad_mask)), dim=1)
+                decoder_x = clip_tokens(decoder_x)
+                dec_pad_mask = clip_tokens(dec_pad_mask)
             
             decoder_probs = self(
                 mask_if_present(encoder_x, continue_mask),
