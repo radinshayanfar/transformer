@@ -27,11 +27,12 @@ python train_wmt.py --pair de-en --source en --target de
 
 **📊 Results**
 
-| Language Pair | Perplexity   | BLEU Score   | Reference BLEU (Vaswani et al., 2017) |
+| Language Pair | Perplexity   | BLEU Score   | Reference BLEU (Vaswani et al., 2017)  |
 |---------------|--------------|--------------|----------------------------------------|
 | EN → DE       | 2.30         | 22.6         | 27.3                                   |
 | DE → EN       | 2.19         | 25.6         | —                                      |
-| EN → FR       | Coming soon  | Coming soon  | 41.0                                   |
+| EN → FR       | 1.33         | 39.2         | 41.0                                   |
+| FR → EN       | 1.55         | 36.4         | —                                      |
 
 This result is achieved under significantly minimal tuning:
 - No learning rate scheduling or warm-up tuning
