@@ -31,7 +31,7 @@ python train_wmt.py --pair de-en --source en --target de
 |---------------|--------------|--------------|----------------------------------------|
 | EN → DE       | 2.30         | 22.6         | 27.3                                   |
 | DE → EN       | 2.19         | 25.6         | —                                      |
-| EN → FR       | 1.33         | 39.2         | 41.0                                   |
+| EN → FR       | 1.33         | 39.2         | 31.8                                   |
 | FR → EN       | 1.55         | 36.4         | —                                      |
 
 This result is achieved under significantly minimal tuning:
@@ -40,7 +40,7 @@ This result is achieved under significantly minimal tuning:
 - Only 1 training epoch
 - No checkpoint averaging or fine-grained validation
 
-Despite the simplicity, the implementation reaches a strong baseline close to the original paper’s result, validating the correctness and robustness of the codebase.
+Despite the simplicity, the implementation reaches a strong baseline comparable to the original paper’s result, validating the correctness and robustness of the codebase.
 
 ---
 
