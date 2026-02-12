@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("train text generation model on WebText")
     parser.add_argument("--ds_path", "-p", required=True, type=str, help="dataset path on disk")
     parser.add_argument("--output_dir", "-o", default="webtext", type=str, help="output directory")
-    parser.add_argument("--n_vocab", default=50_257, type=int, help="model vocab size (default: GPT-2 vocab size)")
+    parser.add_argument("--vocab_size", default=50_257, type=int, help="model vocab size (default: GPT-2 vocab size of 50257)")
     parser.add_argument("--max_length", default=256, type=int, help="max model context length")
     parser.add_argument("--batch_size", default=64, type=int, help="batch size")
     parser.add_argument("--learning_rate", "--lr", default=1e-5, type=float, help="adam learning rate")
@@ -65,8 +65,8 @@ if __name__ == "__main__":
     parser.add_argument("--device", "-d", type=str, help="pytorch device")
     parser.add_argument("--override", action="store_true", help="override output directory if it exists")
     parser.add_argument("--load_checkpoint", action="store_true", help="load model checkpoint from output_dir if exists")
-    parser.add_argument("--train_tokenizer", action="store_true", help="train a custom BPE tokenizer instead of using GPT-2 tokenizer")
-    parser.add_argument("--skip_tokenizer_training", action="store_true", help="skip tokenizer training (use existing tokenizer file)")
+    parser.add_argument("--use_custom_tokenizer", action="store_true", help="use a custom BPE tokenizer instead of GPT-2 tokenizer")
+    parser.add_argument("--skip_tokenizer_training", action="store_true", help="skip tokenizer training and use existing tokenizer file (only valid with --use_custom_tokenizer)")
 
     args = parser.parse_args()
 
@@ -76,10 +76,14 @@ if __name__ == "__main__":
     save_args(args, os.path.join(args.output_dir, "args.txt"))
 
     # Choose tokenizer
-    use_custom_tokenizer = args.train_tokenizer
+    use_custom_tokenizer = args.use_custom_tokenizer
     tokenizer_filepath = os.path.join(args.output_dir, "bpe_tokenizer.json")
     
     if use_custom_tokenizer:
+        # Validate vocab size for BPE training
+        if args.vocab_size < 256 and not args.skip_tokenizer_training:
+            print(f"Warning: vocab_size of {args.vocab_size} is very small for BPE training. Consider using at least 256.")
+        
         # Train or load custom BPE tokenizer
         if not args.skip_tokenizer_training:
             corpus_file = os.path.join(args.ds_path, "tokenizer_corpus.txt")
@@ -88,8 +92,8 @@ if __name__ == "__main__":
                     f"Tokenizer corpus file not found: {corpus_file}\n"
                     f"Please run prepare_webtext.py with --prepare_tokenizer_corpus flag first."
                 )
-            print(f"Training custom BPE tokenizer with vocab size {args.n_vocab}...")
-            train_bpe([corpus_file], args.n_vocab, tokenizer_filepath)
+            print(f"Training custom BPE tokenizer with vocab size {args.vocab_size}...")
+            train_bpe([corpus_file], args.vocab_size, tokenizer_filepath)
         
         tokenizer = Tokenizer.from_file(tokenizer_filepath)
         tokenizer.enable_truncation(max_length=args.max_length)

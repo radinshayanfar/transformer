@@ -91,7 +91,7 @@ python train_webtext.py --ds_path "<dataset_save_dir>"
 To train with a custom BPE tokenizer instead of GPT-2's tokenizer:
 
 ```bash
-python train_webtext.py --ds_path "<dataset_save_dir>" --train_tokenizer --n_vocab 30000
+python train_webtext.py --ds_path "<dataset_save_dir>" --use_custom_tokenizer --vocab_size 30000
 ```
 
 **🔧 Notes**
