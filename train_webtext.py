@@ -5,11 +5,13 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_from_disk
 from transformers import GPT2Tokenizer
+from tokenizers import Tokenizer
 from tqdm import tqdm
 import argparse
 
 from transformer import Transformer
-from utils import save_args, set_seed, load_checkpoint, save_checkpoint
+from utils import pad_and_mask, save_args, set_seed, load_checkpoint, save_checkpoint
+from preprocess import train_bpe
 
 
 class WebTextDataset(Dataset):
@@ -30,14 +32,20 @@ class WebTextDataset(Dataset):
         }
 
     @staticmethod
-    def collate_fn(batch, tokenizer, pad_token="[PAD]"):
+    def collate_fn(batch, tokenizer, pad_token="[PAD]", use_custom_tokenizer=False):
         # batch: list of dicts with "text" (in raw string)
         texts = [item["text"] for item in batch]
-        texts = ["<|endoftext|>" + text + "<|endoftext|>" for text in texts]
-
-        txt_enc = tokenizer(texts, truncation=True, padding=True, max_length=tokenizer.model_max_length, return_tensors="pt")
-
-        texts, attention_mask = txt_enc["input_ids"], txt_enc["attention_mask"]
+        
+        if use_custom_tokenizer:
+            # Using custom BPE tokenizer from tokenizers library
+            texts = ["[BOS]" + text + "[EOS]" for text in texts]
+            txt_enc = tokenizer.encode_batch(texts)
+            texts, attention_mask = pad_and_mask(txt_enc, tokenizer, pad_token)
+        else:
+            # Using GPT-2 tokenizer from HuggingFace
+            texts = ["<|endoftext|>" + text + "<|endoftext|>" for text in texts]
+            txt_enc = tokenizer(texts, truncation=True, padding=True, max_length=tokenizer.model_max_length, return_tensors="pt")
+            texts, attention_mask = txt_enc["input_ids"], txt_enc["attention_mask"]
 
         return {
             "texts": texts,
@@ -49,6 +57,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("train text generation model on WebText")
     parser.add_argument("--ds_path", "-p", required=True, type=str, help="dataset path on disk")
     parser.add_argument("--output_dir", "-o", default="webtext", type=str, help="output directory")
+    parser.add_argument("--n_vocab", default=50_257, type=int, help="model vocab size (default: GPT-2 vocab size)")
     parser.add_argument("--max_length", default=256, type=int, help="max model context length")
     parser.add_argument("--batch_size", default=64, type=int, help="batch size")
     parser.add_argument("--learning_rate", "--lr", default=1e-5, type=float, help="adam learning rate")
@@ -56,6 +65,8 @@ if __name__ == "__main__":
     parser.add_argument("--device", "-d", type=str, help="pytorch device")
     parser.add_argument("--override", action="store_true", help="override output directory if it exists")
     parser.add_argument("--load_checkpoint", action="store_true", help="load model checkpoint from output_dir if exists")
+    parser.add_argument("--train_tokenizer", action="store_true", help="train a custom BPE tokenizer instead of using GPT-2 tokenizer")
+    parser.add_argument("--skip_tokenizer_training", action="store_true", help="skip tokenizer training (use existing tokenizer file)")
 
     args = parser.parse_args()
 
@@ -64,10 +75,33 @@ if __name__ == "__main__":
     os.makedirs(args.output_dir, exist_ok=args.override)
     save_args(args, os.path.join(args.output_dir, "args.txt"))
 
-    # we use GPT-2 tokenizer
-    tokenizer = GPT2Tokenizer.from_pretrained("openai-community/gpt2")
-    tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-    tokenizer.model_max_length = args.max_length
+    # Choose tokenizer
+    use_custom_tokenizer = args.train_tokenizer
+    tokenizer_filepath = os.path.join(args.output_dir, "bpe_tokenizer.json")
+    
+    if use_custom_tokenizer:
+        # Train or load custom BPE tokenizer
+        if not args.skip_tokenizer_training:
+            corpus_file = os.path.join(args.ds_path, "tokenizer_corpus.txt")
+            if not os.path.exists(corpus_file):
+                raise FileNotFoundError(
+                    f"Tokenizer corpus file not found: {corpus_file}\n"
+                    f"Please run prepare_webtext.py with --prepare_tokenizer_corpus flag first."
+                )
+            print(f"Training custom BPE tokenizer with vocab size {args.n_vocab}...")
+            train_bpe([corpus_file], args.n_vocab, tokenizer_filepath)
+        
+        tokenizer = Tokenizer.from_file(tokenizer_filepath)
+        tokenizer.enable_truncation(max_length=args.max_length)
+        vocab_size = tokenizer.get_vocab_size()
+        print(f"Using custom BPE tokenizer with vocab size: {vocab_size}")
+    else:
+        # Use GPT-2 tokenizer
+        tokenizer = GPT2Tokenizer.from_pretrained("openai-community/gpt2")
+        tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+        tokenizer.model_max_length = args.max_length
+        vocab_size = tokenizer.vocab_size + len(tokenizer.added_tokens_encoder)
+        print(f"Using GPT-2 tokenizer with vocab size: {vocab_size}")
 
     train_dataset = WebTextDataset(path=args.ds_path)
 
@@ -75,7 +109,7 @@ if __name__ == "__main__":
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        collate_fn=lambda x: WebTextDataset.collate_fn(x, tokenizer)
+        collate_fn=lambda x: WebTextDataset.collate_fn(x, tokenizer, use_custom_tokenizer=use_custom_tokenizer)
     )
 
     if args.device is not None:
@@ -87,7 +121,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
 
-    transformer = Transformer(12, 8, 768, 64, 2048, tokenizer.total_vocab_size, args.max_length, arch="decoder")
+    transformer = Transformer(12, 8, 768, 64, 2048, vocab_size, args.max_length, arch="decoder")
     transformer = transformer.to(device)
 
     loss_fn = nn.CrossEntropyLoss(reduction="none", label_smoothing=0.1)  # Set reduction to 'none' to get element-wise loss
