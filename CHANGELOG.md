@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `--skip_tokenizer_training` flag to `train_webtext.py` to reuse existing tokenizer files
   - Modified `WebTextDataset.collate_fn()` to support both custom BPE tokenizers and GPT-2 tokenizers
   - Added validation warning for unusually small vocabulary sizes (< 256)
+- Test suite for tokenizer training functionality
+  - Added `test_tokenizer.py` with comprehensive unit tests for BPE tokenizer training
+  - Tests cover tokenizer creation, loading, special tokens, encoding, and vocabulary size validation
+  - Added `TESTS.md` documentation for running and understanding tests
 
 ### Changed
 - Updated `train_webtext.py` to support custom tokenizer training while maintaining backward compatibility (defaults to GPT-2 tokenizer)
@@ -24,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated README.md with examples for preparing tokenizer corpus
 - Updated README.md with examples for training with custom BPE tokenizer
 - Updated README.md notes section to reflect new tokenizer options
+- Added testing section to README.md with instructions for running tests
+- Added TESTS.md with detailed test documentation
 
 ## [0.1.0] - Initial Release
 

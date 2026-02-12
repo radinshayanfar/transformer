@@ -103,6 +103,19 @@ python train_webtext.py --ds_path "<dataset_save_dir>" --use_custom_tokenizer --
 
 ---
 
+## 🧪 Testing
+
+The repository includes unit tests for the tokenizer training functionality.
+
+To run the tests:
+```bash
+python test_tokenizer.py
+```
+
+See [TESTS.md](TESTS.md) for detailed information about test coverage and requirements.
+
+---
+
 ## 📂 Code Structure
 
 - `transformer.py`  
@@ -116,6 +129,9 @@ python train_webtext.py --ds_path "<dataset_save_dir>" --use_custom_tokenizer --
 
 - `utils.py`  
   Miscellaneous helper functions for architecture and training (e.g., positional encodings, padding masks).
+
+- `test_tokenizer.py`  
+  Unit tests for tokenizer training functionality.
 
 ---
 
