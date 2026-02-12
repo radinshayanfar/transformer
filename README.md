@@ -96,7 +96,7 @@ python train_webtext.py --ds_path "<dataset_save_dir>" --use_custom_tokenizer --
 
 **🔧 Notes**
 - By default, uses the GPT-2 tokenizer (via HuggingFace) for simplicity and speed.
-- Optionally supports training a custom BPE tokenizer with `--train_tokenizer` flag.
+- Optionally supports training a custom BPE tokenizer with `--use_custom_tokenizer` flag.
 - Trains only on the first 256 tokens of each example (for efficiency).
 - Architecture mirrors the smallest GPT-2 model described in the original paper.
 - Focuses on proof-of-concept and scalability, not direct reproduction of results.
