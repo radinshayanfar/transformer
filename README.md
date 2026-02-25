@@ -74,6 +74,12 @@ Download and preprocess the dataset with:
 python prepare_webtext.py --save_dir "<dataset_save_dir>"
 ```
 
+To prepare a corpus file for custom tokenizer training, add the `--prepare_tokenizer_corpus` flag:
+
+```bash
+python prepare_webtext.py --save_dir "<dataset_save_dir>" --prepare_tokenizer_corpus
+```
+
 **🚀 Training**
 
 Once prepared, train the model using:
@@ -82,11 +88,31 @@ Once prepared, train the model using:
 python train_webtext.py --ds_path "<dataset_save_dir>"
 ```
 
+To train with a custom BPE tokenizer instead of GPT-2's tokenizer:
+
+```bash
+python train_webtext.py --ds_path "<dataset_save_dir>" --use_custom_tokenizer --vocab_size 30000
+```
+
 **🔧 Notes**
-- Uses the GPT-2 tokenizer (via HuggingFace) for simplicity and speed.
+- By default, uses the GPT-2 tokenizer (via HuggingFace) for simplicity and speed.
+- Optionally supports training a custom BPE tokenizer with `--use_custom_tokenizer` flag.
 - Trains only on the first 256 tokens of each example (for efficiency).
 - Architecture mirrors the smallest GPT-2 model described in the original paper.
 - Focuses on proof-of-concept and scalability, not direct reproduction of results.
+
+---
+
+## 🧪 Testing
+
+The repository includes unit tests for the tokenizer training functionality.
+
+To run the tests:
+```bash
+python test_tokenizer.py
+```
+
+See [TESTS.md](TESTS.md) for detailed information about test coverage and requirements.
 
 ---
 
@@ -103,6 +129,9 @@ python train_webtext.py --ds_path "<dataset_save_dir>"
 
 - `utils.py`  
   Miscellaneous helper functions for architecture and training (e.g., positional encodings, padding masks).
+
+- `test_tokenizer.py`  
+  Unit tests for tokenizer training functionality.
 
 ---
 
